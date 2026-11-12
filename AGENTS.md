@@ -46,13 +46,27 @@ Hai phép kiểm đáng giữ, vì chúng bắt được lỗi thật đã từn
 App cần chạy thử tay trên trình duyệt thật (Safari) trước khi báo xong: DOM giả
 không thay được cảm giác bấm và bố cục trên máy.
 
-**Đã thử mở trên máy này (12/11/2026) và chưa được:** dựng máy chủ nội bộ
-(`python3 -m http.server`, cổng 8765, chạy nền, nhật ký `.tmp/serve.log`) rồi
-`icli url open http://127.0.0.1:8765/app/quan-ly-hkd.html` — Safari báo mở được
-nhưng nhật ký máy chủ không nhận yêu cầu nào, nên **không có bằng chứng bằng mắt**.
-Lần sau thử: hỏi ý kiến Sếp trước, rồi dùng `file_show` để mở tệp HTML trong Quick
-Look, hoặc lưu tệp vào Ứng dụng Tệp và nhờ Sếp mở bằng Safari. Cũng **chưa in thử**
-ra máy in/PDF, nên bố cục bản in A4 chưa ai xem.
+**Cách mở app trên Safari của máy này (đã chạy được 12/11/2026):** máy chủ tạm phải
+**tách hẳn khỏi tiến trình của lệnh gọi** (double fork + `setsid`), không thì nó chết
+ngay khi lệnh kết thúc và Safari chỉ thấy cổng đóng:
+
+```sh
+python3 .tmp/serve_app.py "<gốc dự án>" 8770 "<gốc dự án>/.tmp/serve.log"
+```
+
+rồi mở `http://127.0.0.1:8770/app/quan-ly-hkd.html` bằng `apelin_screen_interact
+open_url`. Dừng máy chủ: `pkill -f 'http.server 8770'`.
+
+Đã có bằng chứng: nhật ký máy chủ ghi `GET /app/quan-ly-hkd.html 200` kèm yêu cầu
+`favicon.ico`; một bản dò chèn thêm (`code_run` tạo `.tmp/probe.html`) báo về 11 màn
+hình nạp được, thanh dưới đủ 5 mục, màn `home` vẽ ra chữ, IndexedDB và `Persist` có,
+không lỗi JavaScript.
+
+**Còn bị chặn:** `apelin_screen_read_tree` và `icli ui tree` trả "frontmost application
+could not be verified" vì RunningBoard báo nhiều ứng dụng cùng ở trước (Safari, X,
+Apelin), nên chưa tự đọc hay tự bấm trong Safari được — muốn kiểm bố cục thì xin Sếp
+cho chụp một ảnh màn hình. Cũng **chưa in thử** ra máy in/PDF, nên bố cục bản in A4
+chưa ai xem.
 
 ## Bản đồ tệp
 
