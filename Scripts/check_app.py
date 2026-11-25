@@ -113,9 +113,14 @@ def check_invariants(html, code, srcs):
     errs = []
     if 'render(); render();' in code:
         errs.append('có chỗ gọi render() hai lần liền nhau')
-    for need in ['function taxCalc(', "case 'printTax'", 'DEFAULT_POLICY', 'function render()', 'function go(']:
+    for need in ['function taxCalc(', "case 'printTax'", 'DEFAULT_POLICY', 'function render()', 'function go(',
+                 'function declarationData(', 'function applyProduction(', 'function undoProduction(',
+                 "case 'printDeclaration'", "case 'saveProduction'"]:
         if need not in code:
             errs.append('thiếu trong JS: ' + need)
+    for need in ['Mẫu số 01/CNKD', 'không thay thế tờ khai chính thức', 'Sản xuất']:
+        if need not in html and need not in code:
+            errs.append('thiếu nội dung tờ khai/sản xuất: ' + need)
     for need in ['id="app"', 'id="sheet"', 'id="print"', 'id="toast"', 'id="tabs"',
                  'rel="stylesheet"', 'lang="vi"']:
         if need not in html:

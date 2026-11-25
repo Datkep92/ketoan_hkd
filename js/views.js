@@ -120,10 +120,12 @@ VIEWS.home = function(){
     + nav('products', 'Hàng hóa', 'Thêm, sửa giá, theo dõi tồn')
     + nav('customers', 'Khách hàng', 'Ghi nợ, thu nợ')
     + nav('purchases', 'Mua hàng', 'Nhập kho, trả nợ nhà cung cấp')
+    + nav('production', 'Sản xuất', 'Nguyên liệu, nhân công, chi phí chung')
     + nav('stock', 'Tồn kho', 'Kiểm kê, mức tối thiểu')
     + nav('data', 'Cổng dữ liệu', 'Nhập/xuất hóa đơn JSON, XML')
     + nav('expenses', 'Chi phí', 'Ghi chi phí, in phiếu')
     + nav('policy', 'Chính sách thuế', 'Ngưỡng, thuế suất, giảm thuế')
+    + nav('declaration', 'Tờ khai 01/CNKD', 'Bản nháp theo mẫu, in và xuất JSON')
     + '</div></div>'
     + '<div class="card muted small">Phần mềm chỉ ghi sổ và ước tính thuế. Không phát hành hóa đơn điện tử, không nộp tờ khai thay, không tự cập nhật luật.</div>'
     + '</div>';
@@ -421,6 +423,7 @@ VIEWS.tax = function(){
     + '<p class="muted small">Hai cách trên là ước tính để tham khảo. Phương pháp tính và kỳ kê khai phải giữ ổn định theo quy định; hãy đối chiếu với quy định hiện hành trước khi nộp.</p>'
     + '</div>'
     + '<div class="row wrap"><button class="btn" data-act="printTax">In tư vấn thuế</button> '
+    + '<button class="btn" data-act="route" data-route="declaration">Lên tờ khai 01/CNKD</button> '
     + '<button class="btn primary" data-act="saveTaxPay">Ghi số đã nộp</button></div>'
     + '</div>';
 };
@@ -457,6 +460,140 @@ VIEWS.expenses = function(){
           + '<button class="btn sm danger" data-act="delExpense" data-id="' + e.id + '">Xóa</button></td></tr>').join('')
         + '</table></div>'
       : '<div class="card empty">Chưa có chi phí. Nhấn Thêm chi phí để bắt đầu.</div>')
+    + '</div>';
+};
+
+/* ---------------------------- sản xuất ---------------------------- */
+function viewProdList(){
+  const list = S.data.production || S.data.prodBatches || [];
+  return list.filter(b => b.hid === S.hid)
+    .slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+}
+function viewProdCost(b){
+  if (typeof prodBatchCost === 'function') return prodBatchCost(b);
+  const materials = sum((b.materials || []).map(m => n0(m.qty) * n0(m.price)));
+  const labor = n0(b.labor), overhead = n0(b.overhead);
+  const total = materials + labor + overhead, q = n0(b.qty);
+  return { materials:materials, labor:labor, overhead:overhead,
+    total:total, unit:q > 0 ? Math.round(total / q) : 0 };
+}
+function viewDecl(o, keys, fallback){
+  for (let i = 0; i < keys.length; i++) if (o && o[keys[i]] != null) return o[keys[i]];
+  return fallback == null ? 0 : fallback;
+}
+
+VIEWS.production = function(){
+  const list = viewProdList();
+  const total = sum(list.map(b => viewProdCost(b).total));
+  return '<div class="pad">'
+    + '<div class="card"><div class="row wrap"><div><h2 style="margin:0">Quản lý sản xuất</h2>'
+    + '<div class="muted">Ghi từng lô thành phẩm: nguyên liệu, nhân công và chi phí chung để biết giá thành.</div></div>'
+    + '<div class="sp"></div>'
+    + '<button class="btn primary" data-act="addProduction">＋ Thêm lô sản xuất</button> '
+    + '<button class="btn sm" data-act="route" data-route="products">Hàng hóa</button></div></div>'
+    + '<div class="kpi">'
+    + '<div><div class="muted">Tổng số lô</div><div class="big">' + fmt(list.length) + '</div></div>'
+    + '<div><div class="muted">Tổng thành tiền</div><div class="big">' + money(total) + '</div></div>'
+    + '</div>'
+    + (list.length
+      ? '<div class="card"><div class="tablewrap"><table class="tbl">'
+        + '<tr><th>Mã lô</th><th>Ngày</th><th>Thành phẩm</th><th class="r">Số lượng</th>'
+        + '<th class="r">Tiền nguyên liệu</th><th class="r">Nhân công</th><th class="r">Chi phí chung</th>'
+        + '<th class="r">Thành tiền</th><th class="r">Đơn giá</th><th class="act">Thao tác</th></tr>'
+        + list.map(b => {
+            const cost = viewProdCost(b), q = n0(b.qty);
+            const prod = b.productId ? (S.data.products || []).find(x => x.id === b.productId) : null;
+            const pname = b.product || b.productName || (prod && prod.name) || b.name || '';
+            return '<tr><td>' + esc(b.code || '') + '</td><td>' + dmy(b.date) + '</td>'
+              + '<td>' + esc(pname) + '</td>'
+              + '<td class="r num">' + fmt(q) + '</td>'
+              + '<td class="r num">' + money(cost.materials) + '</td>'
+              + '<td class="r num">' + money(cost.labor) + '</td>'
+              + '<td class="r num">' + money(cost.overhead) + '</td>'
+              + '<td class="r num">' + money(cost.total) + '</td>'
+              + '<td class="r num">' + money(cost.unit) + '</td>'
+              + '<td class="act"><button class="btn sm" data-act="printProduction" data-id="' + b.id + '">In</button> '
+              + '<button class="btn sm danger" data-act="delProduction" data-id="' + b.id + '">Xóa</button></td></tr>';
+          }).join('')
+        + '</table></div></div>'
+      : '<div class="card empty">Chưa có lô sản xuất. Nhấn Thêm lô sản xuất để bắt đầu.</div>')
+    + '<div class="card muted small">Thành tiền là tổng nguyên liệu, nhân công và chi phí chung; đơn giá chỉ để tham khảo khi định giá bán.</div>'
+    + '</div>';
+};
+
+/* ---------------------------- tờ khai 01/CNKD ---------------------------- */
+VIEWS.declaration = function(){
+  const d = declarationData(S.hid, S.taxYear, S.taxMonth, S._declMethod) || {};
+  const method = S._declMethod === 'B' ? 'B' : 'A';
+  const years = Array.from({ length:5 }, (_, i) => S.taxYear - 2 + i);
+  const months = Array.from({ length:12 }, (_, i) => i + 1);
+  const rows = Array.isArray(d.rows) ? d.rows
+    : (Array.isArray(d.groups) ? d.groups : (Array.isArray(d.lines) ? d.lines : []));
+  const total = d.total || d.totals || {};
+  const sumCol = f => sum(rows.map(r => n0(viewDecl(r, [f]))));
+  const body = rows.map((r, i) => {
+    const k = String(viewDecl(r, ['k', 'key', 'code'], '1.' + (i + 1)));
+    const line = String(viewDecl(r, ['row', 'line', 'stt'], '1.' + (i + 1)));
+    const name = viewDecl(r, ['name', 'title', 'group'], GROUP_NAME(k));
+    return '<tr><td>' + esc(line) + '</td><td>' + esc(name) + '</td>'
+      + '<td class="r num">' + money(n0(viewDecl(r, ['rev', 'revenue', 'totalRevenue']))) + '</td>'
+      + '<td class="r"><input type="number" inputmode="numeric" style="width:120px" id="dEx_' + esc(k)
+        + '" value="' + n0(viewDecl(r, ['ex', 'exRev', 'adjEx', 'exempt'])) + '"></td>'
+      + '<td class="r"><input type="number" inputmode="numeric" style="width:120px" id="dZero_' + esc(k)
+        + '" value="' + n0(viewDecl(r, ['zero', 'zeroRev', 'adjZero'])) + '"></td>'
+      + '<td class="r num">' + money(n0(viewDecl(r, ['vat', 'vatAmount']))) + '</td>'
+      + '<td class="r num">' + money(n0(viewDecl(r, ['pitBase', 'taxable', 'taxableRev']))) + '</td>'
+      + '<td class="r num">' + money(n0(viewDecl(r, ['deductible', 'deduct', 'cost']))) + '</td>'
+      + '<td class="r num">' + money(n0(viewDecl(r, ['tncn', 'pit']))) + '</td></tr>';
+  }).join('');
+  const t = f => n0(viewDecl(total, [f], sumCol(f)));
+  const exempt = n0(viewDecl(total, ['exemptTax'], viewDecl(d, ['exemptTax'], 0)));
+  const due = n0(viewDecl(total, ['remaining'], viewDecl(d, ['remaining'], 0)));
+  return '<div class="pad">'
+    + '<div class="card"><div class="row wrap"><div><h2 style="margin:0">Bản nháp tờ khai Mẫu số 01/CNKD</h2>'
+    + '<div class="muted">Số liệu từ phiếu đã ghi trong app; có thể chỉnh ô [09] và [10] trước khi in hoặc xuất.</div></div>'
+    + '<div class="sp"></div><button class="btn sm" data-act="route" data-route="tax">← Về Thuế</button></div>'
+    + '<div class="row wrap" style="margin-top:12px">'
+    + '<label class="f" style="margin:0"><span>Năm</span><select id="declYear">'
+    + years.map(y => '<option value="' + y + '"' + (y === S.taxYear ? ' selected' : '') + '>' + y + '</option>').join('')
+    + '</select></label>'
+    + '<label class="f" style="margin:0"><span>Kỳ</span><select id="declMonth">'
+    + '<option value="0"' + (S.taxMonth === 0 ? ' selected' : '') + '>Cả năm</option>'
+    + months.map(m => '<option value="' + m + '"' + (m === S.taxMonth ? ' selected' : '') + '>Tháng ' + m + '</option>').join('')
+    + '</select></label>'
+    + '<label class="f" style="margin:0"><span>Cách tính thuế TNCN</span><select id="declMethod">'
+    + '<option value="A"' + (method === 'A' ? ' selected' : '') + '>A — Thu nhập tính thuế × thuế suất</option>'
+    + '<option value="B"' + (method === 'B' ? ' selected' : '') + '>B — Doanh thu tính thuế × thuế suất</option>'
+    + '</select></label></div></div>'
+    + '<div class="card warn"><b>Đây là bản nháp.</b> Tờ khai này không thay thế tờ khai chính thức và app không nộp tờ khai thay. '
+    + 'Các phần thuế tiêu thụ đặc biệt, thuế tài nguyên, thuế bảo vệ môi trường và địa điểm kinh doanh khác không tự điền — phải khai trên kênh chính thức.</div>'
+    + '<div class="card"><h3 style="margin:0 0 10px">Phần I — Doanh thu, chi phí và thuế theo nhóm ngành</h3>'
+    + (rows.length
+      ? '<div class="tablewrap"><table class="tbl">'
+        + '<tr><th>Dòng</th><th>Nhóm ngành</th><th class="r">[08] Tổng doanh thu</th>'
+        + '<th class="r">[09] Không chịu GTGT</th><th class="r">[10] Thuế suất 0%</th>'
+        + '<th class="r">[11] Thuế GTGT</th><th class="r">[12] Doanh thu chịu thuế</th>'
+        + '<th class="r">[13] Doanh thu được trừ</th><th class="r">[14] Thuế TNCN</th></tr>'
+        + body
+        + '<tr><td>[18]</td><td><b>Cộng</b></td><td class="r num"><b>' + money(t('rev')) + '</b></td>'
+        + '<td class="r num">' + money(t('exempt')) + '</td>'
+        + '<td class="r num">' + money(t('zero')) + '</td>'
+        + '<td class="r num"><b>' + money(t('vat')) + '</b></td>'
+        + '<td class="r num"><b>' + money(t('pitBase')) + '</b></td>'
+        + '<td class="r num"><b>' + money(t('deduct')) + '</b></td>'
+        + '<td class="r num"><b>' + money(t('pit')) + '</b></td></tr>'
+        + '</table></div>'
+      : '<div class="empty">Chưa có số liệu doanh thu cho kỳ này.</div>')
+    + '</div>'
+    + '<div class="card"><div class="tablewrap"><table class="tbl">'
+    + '<tr><td>[19] Số thuế được miễn, giảm</td><td class="r num">' + money(exempt) + '</td></tr>'
+    + '<tr><td>[20] Số thuế còn phải nộp</td><td class="r num"><b>' + money(due) + '</b></td></tr>'
+    + '</table></div></div>'
+    + '<div class="row wrap"><button class="btn primary" data-act="saveDeclAdj">Lưu điều chỉnh</button> '
+    + '<button class="btn" data-act="printDeclaration">In bản nháp</button> '
+    + '<button class="btn" data-act="exportDeclaration">Xuất JSON</button> '
+    + '<button class="btn" data-act="route" data-route="tax">Về Thuế</button></div>'
+    + '<p class="muted small">Số thuế chỉ là ước tính từ hóa đơn đã ghi; cần đối chiếu với quy định hiện hành trước khi kê khai chính thức.</p>'
     + '</div>';
 };
 
@@ -516,6 +653,7 @@ VIEWS.menu = function(){
     + nav('sell', 'Bán hàng', 'Lập phiếu, in, ghi nợ')
     + nav('products', 'Hàng hóa', 'Thêm, sửa, xóa mặt hàng')
     + nav('purchases', 'Mua hàng', 'Phiếu nhập, nhà cung cấp')
+    + nav('production', 'Sản xuất', 'Nguyên liệu, nhân công, chi phí chung, thành phẩm')
     + nav('stock', 'Tồn kho', 'Kiểm kê, cảnh báo tồn thấp')
     + nav('customers', 'Khách hàng', 'Ghi nợ, thu nợ')
     + nav('expenses', 'Chi phí', 'Ghi chép và in phiếu chi')
@@ -525,6 +663,7 @@ VIEWS.menu = function(){
     + '</div>'
     + '<div class="card list-card"><h3>Dữ liệu và hỗ trợ</h3>'
     + nav('data', 'Cổng dữ liệu hóa đơn', 'Nhập/xuất JSON, XML')
+    + nav('declaration', 'Tờ khai 01/CNKD', 'Bản nháp theo mẫu, in và xuất JSON')
     + item('backup', 'Sao lưu ra tệp JSON', 'Lưu định kỳ ở nơi an toàn')
     + item('restore', 'Nhập từ tệp JSON', 'Ghi đè dữ liệu hiện có sau khi xác nhận')
     + item('loadDemo', 'Nạp dữ liệu mẫu đầy đủ', 'Xem ngay app với dữ liệu có sẵn (thay sau xác nhận)')
@@ -547,10 +686,12 @@ VIEWS.help = function(){
     + '3. Vào Bán hàng: chọn hàng, nhập khách, chọn hình thức thu, nhấn Lưu phiếu.<br>'
     + '4. Vào Mua hàng để ghi phiếu nhập, Nhà cung cấp để trả nợ, Tồn kho để kiểm kê.<br>'
     + '5. Vào Sổ sách để xem, in, xuất Excel sáu sổ; vào Thuế để xem số ước tính.<br>'
-    + '6. Vào Cổng dữ liệu nếu cần nhận hóa đơn JSON/XML từ phần mềm khác.<br>'
-    + '7. Muốn thử ngay: Menu ▸ Nạp dữ liệu mẫu đầy đủ (sẽ thay dữ liệu hiện có sau khi xác nhận).</p>'
+    + '6. Vào Sản xuất để ghi lô thành phẩm (nguyên liệu, nhân công, chi phí chung); vào Tờ khai 01/CNKD để xem bản nháp, in hoặc xuất JSON.<br>'
+    + '7. Vào Cổng dữ liệu nếu cần nhận hóa đơn JSON/XML từ phần mềm khác.<br>'
+    + '8. Muốn thử ngay: Menu ▸ Nạp dữ liệu mẫu đầy đủ (sẽ thay dữ liệu hiện có sau khi xác nhận).</p>'
     + '<h3>Giới hạn cần nhớ</h3>'
     + '<p class="muted">App <b>không</b> phát hành hóa đơn điện tử, <b>không</b> nộp tờ khai thay, <b>không</b> tự cập nhật luật. Số thuế chỉ là ước tính từ các phiếu đã ghi, cần đối chiếu với quy định hiện hành.</p>'
+    + '<p class="muted">Tờ khai 01/CNKD trong app chỉ là bản nháp để đối chiếu số liệu; không thay thế tờ khai chính thức và app <b>không nộp tờ khai thay</b>.</p>'
     + '<p class="muted">In ấn dùng hộp thoại in của trình duyệt (AirPrint hoặc Lưu thành PDF). Chưa hỗ trợ máy in hóa đơn khổ nhiệt 58/80 mm.</p>'
     + '<h3>Giữ dữ liệu an toàn</h3>'
     + '<p class="muted">Vào Menu ▸ Sao lưu ra tệp JSON thường xuyên. Khi mở trên máy khác, dùng Nhập từ tệp JSON. Xóa dữ liệu trình duyệt sẽ làm mất dữ liệu nếu chưa sao lưu.</p>'

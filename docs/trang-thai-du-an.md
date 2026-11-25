@@ -1,6 +1,6 @@
 # Trạng thái dự án
 
-Cập nhật: 25/11/2026. Phần mềm gồm `index.html`, `css/style.css` và ba tệp
+Cập nhật: 26/11/2026. Phần mềm gồm `index.html`, `css/style.css` và ba tệp
 `js/*.js`; chạy trong trình duyệt, không build, không máy chủ. Giao diện có
 thanh bên khi dùng màn hình rộng, năm thẻ khi dùng điện thoại.
 
@@ -26,11 +26,13 @@ thanh bên khi dùng màn hình rộng, năm thẻ khi dùng điện thoại.
 | Lưu trữ trong máy (IndexedDB, đường lui localStorage) | smoke + Safari |
 | Sao lưu ra tệp JSON và nhập lại | smoke |
 | Mọi màn hình vẽ được; mọi nút/ô có xử lý; Menu và liên kết trỏ đúng | smoke |
-| Phím tắt Alt+1…Alt+8, Esc | smoke |
-| Dữ liệu mẫu: nút ở cài đặt/Menu, xác nhận, từ chối không ghi đè, hai hộ đầy đủ, mọi màn vẽ được | smoke |
+| Phím tắt Alt+1…Alt+9, Alt+0, Esc | smoke |
+| Sản xuất: phiếu lô, nguyên liệu trừ tồn, nhân công/chi phí chung, tính đơn giá, nhập kho, hoàn tồn khi xóa | smoke |
+| Tờ khai 01/CNKD: bản nháp theo nhóm ngành, điều chỉnh [09]/[10], in, xuất JSON | smoke |
+| Dữ liệu mẫu: nút ở cài đặt/Menu, xác nhận, từ chối không ghi đè, hai hộ đầy đủ, mọi màn vẽ được, có lô sản xuất | smoke |
 | Cấu trúc trang, thứ tự tải script, cú pháp | `python3 Scripts/check_app.py` |
 
-Kết quả lần chạy gần nhất: **229 điều đúng, 0 điều sai**; kiểm cấu trúc cũng
+Kết quả lần chạy gần nhất: **267 điều đúng, 0 điều sai**; kiểm cấu trúc cũng
 đạt. Cách chạy: xem `AGENTS.md`.
 
 **Kiểm trong Safari thật (25/11/2026, bản sau khi mở rộng):** máy chủ nội bộ
@@ -49,6 +51,11 @@ trong hai nhóm Menu, không lỗi JavaScript.
 `https://datkep92.github.io/ketoan_hkd/`. Trang và cả bốn tệp CSS/JS đều trả về
 `HTTP 200`; nội dung trang đúng bản đã kiểm ở trên. Chưa bấm thử trên bản công
 khai bằng Safari — phần giao diện đã thử qua máy chủ nội bộ cùng một mã nguồn.
+
+**Tính giá thành và tờ khai (26/11/2026):** thêm hai màn Sản xuất và Tờ khai
+01/CNKD, hai phím tắt Alt+9/Alt+0. Đã kiểm đủ luồng trong khung mô phỏng, kể
+cả hoàn đúng tồn nguyên liệu khi xóa lô dù tồn đã về 0. Chưa mở hai màn này
+trên Safari thật và chưa in bản nháp ra PDF.
 
 ## Chưa kiểm trên máy thật
 

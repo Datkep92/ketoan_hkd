@@ -132,6 +132,36 @@ function stockAdjustForm(p){
     + '<button class="btn" data-act="closeSheet">Hủy</button></div>';
 }
 
+function productionForm(){
+  const items = prods();
+  const opts = items.map(p =>
+    '<option value="' + esc(p.id) + '" data-name="' + esc(p.name || '') + '">' + esc(p.name || '') + '</option>').join('');
+  const proOpts = items.map(p =>
+    '<option value="' + esc(p.id) + '">' + esc(p.name || '') + (p.unit ? ' (' + esc(p.unit) + ')' : '') + '</option>').join('');
+  const mats = [1, 2, 3].map(i =>
+    '<tr><td><select id="prM' + i + 'Pid"><option value="">Không trừ tồn</option>' + opts + '</select></td>'
+    + '<td><input type="text" id="prM' + i + 'Name" placeholder="Tên nguyên liệu"></td>'
+    + '<td><input type="number" inputmode="numeric" id="prM' + i + 'Qty" value="1" min="0"></td>'
+    + '<td><input type="number" inputmode="numeric" id="prM' + i + 'Price" placeholder="Đơn giá"></td></tr>').join('');
+  return '<h2>Phiếu sản xuất</h2>'
+    + '<div class="grid2">'
+    + '<label class="f"><span>Số phiếu</span><input type="text" id="prCode" value="' + esc(prodCode()) + '"></label>'
+    + '<label class="f"><span>Ngày sản xuất</span><input type="date" id="prDate" value="' + esc(todayISO()) + '"></label></div>'
+    + '<div class="grid2">'
+    + '<label class="f"><span>Thành phẩm *</span><select id="prProduct">' + proOpts + '</select></label>'
+    + '<label class="f"><span>Số lượng *</span><input type="number" inputmode="numeric" id="prQty" value="1" min="1"></label></div>'
+    + '<h3 style="margin:14px 0 6px">Nguyên liệu</h3>'
+    + '<div class="tablewrap"><table class="tbl"><tr><th>Hàng hóa</th><th>Tên nguyên liệu</th><th style="width:70px">SL</th><th style="width:120px">Đơn giá</th></tr>'
+    + mats + '</table></div>'
+    + '<div class="grid2">'
+    + '<label class="f"><span>Tiền công</span><input type="number" inputmode="numeric" id="prLabor" value="0"></label>'
+    + '<label class="f"><span>Chi phí chung</span><input type="number" inputmode="numeric" id="prOverhead" value="0"></label></div>'
+    + '<label class="f"><span>Ghi chú</span><input type="text" id="prNote" placeholder="Không bắt buộc"></label>'
+    + '<p class="muted small">Chọn hàng hóa ở cột đầu để trừ tồn kho nguyên liệu; chọn “Không trừ tồn” nếu chỉ ghi chi phí.</p>'
+    + '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="saveProduction">Lưu phiếu sản xuất</button> '
+    + '<button class="btn" data-act="closeSheet">Hủy</button></div>';
+}
+
 function bridgeOut(text, ok){
   const box = $('#bridgeOut');
   if (box) box.innerHTML = '<pre class="' + (ok ? 'ok' : 'warn') + '">' + esc(text) + '</pre>';
@@ -214,6 +244,66 @@ function printTax(){
     + '<tr><td>Đã nộp</td><td class="r num">' + money(r.paid) + '</td></tr></table>'
     + '<div class="small">Số liệu lập từ phiếu bán ghi trong phần mềm, là ước tính tham khảo. '
     + 'Không thay thế hóa đơn điện tử hay tờ khai chính thức.</div>' + docFoot());
+}
+
+function printProduction(b){
+  const prod = (prods().find(x => x.id === b.productId) || {});
+  const c = prodBatchCost(b);
+  const rows = (b.materials || []).map(m =>
+    '<tr><td>' + esc(m.name || '') + '</td><td class="r">' + fmt(m.qty) + '</td>'
+    + '<td class="r num">' + money(m.price) + '</td><td class="r num">' + money(n0(m.qty) * n0(m.price)) + '</td></tr>').join('');
+  printHtml(docHead('PHIẾU SẢN XUẤT', 'Số: ' + esc(b.code || '') + ' · Ngày: ' + dmy(b.date))
+    + '<div class="small">Thành phẩm: ' + esc(prod.name || '') + ' · Số lượng: ' + fmt(b.qty) + ' ' + esc(prod.unit || '') + '</div>'
+    + '<table><tr><th>Nguyên liệu</th><th class="r">SL</th><th class="r">Đơn giá</th><th class="r">Thành tiền</th></tr>' + rows
+    + '<tr><th colspan="3">Cộng nguyên liệu</th><th class="r num">' + money(c.materials) + '</th></tr>'
+    + '<tr><td colspan="3">Tiền công</td><td class="r num">' + money(c.labor) + '</td></tr>'
+    + '<tr><td colspan="3">Chi phí chung</td><td class="r num">' + money(c.overhead) + '</td></tr>'
+    + '<tr><th colspan="3">Tổng chi phí lô</th><th class="r num">' + money(c.total) + '</th></tr>'
+    + '<tr><th colspan="3">Đơn giá thành phẩm</th><th class="r num">' + money(c.unit) + '</th></tr></table>'
+    + (b.note ? '<div class="small">Ghi chú: ' + esc(b.note) + '</div>' : '')
+    + '<div class="small">Phiếu nội bộ, không phải hóa đơn. Đã trừ tồn nguyên liệu và nhập tồn thành phẩm.</div>'
+    + '<div class="sign"><div>Người ghi phiếu<br><br><br>(Ký, ghi rõ họ tên)</div>'
+    + '<div>Người nhận thành phẩm<br><br><br>(Ký, ghi rõ họ tên)</div></div></div>');
+}
+
+function printDeclaration(){
+  const d = declarationData(S.hid, S.taxYear, S.taxMonth, S._declMethod) || {};
+  const mLabel = d.method === 'A'
+    ? 'A — Thu nhập tính thuế × thuế suất'
+    : 'B — Doanh thu tính thuế × thuế suất';
+  const h = hh() || {};
+  const rows = (d.groups || []).map(g =>
+    '<tr><td>' + esc(g.row || '') + '</td><td>' + esc(g.name) + '</td>'
+    + '<td class="r num">' + money(g.rev) + '</td>'
+    + '<td class="r num">' + money(g.exempt) + '</td>'
+    + '<td class="r num">' + money(g.zero) + '</td>'
+    + '<td class="r num">' + money(g.vat) + '</td>'
+    + '<td class="r num">' + money(g.pitBase) + '</td>'
+    + '<td class="r num">' + money(g.deduct) + '</td>'
+    + '<td class="r num">' + money(g.pit) + '</td></tr>').join('');
+  const t = d.totals || {};
+  printHtml(docHead('BẢN NHÁP MẪU SỐ 01/CNKD', 'Kỳ: ' + esc(d.period || ''))
+    + '<div class="small">Hộ kinh doanh: ' + esc(h.name) + ' · MST: ' + esc(h.taxCode)
+    + ' · Địa chỉ: ' + esc(h.address) + '</div>'
+    + '<div class="small">Cách tính thuế TNCN: ' + mLabel + '</div>'
+    + '<p class="small">Bản nháp tự tính — không thay thế tờ khai chính thức. '
+    + 'Số liệu ước tính từ hóa đơn đã ghi trong phần mềm, phải đối chiếu trước khi kê khai trên kênh chính thức.</p>'
+    + '<table><tr><th>Dòng</th><th>Nhóm ngành</th><th>[08]</th><th>[09]</th><th>[10]</th>'
+    + '<th>[11]</th><th>[12]</th><th>[13]</th><th>[14]</th></tr>'
+    + '<tr><td colspan="9" class="small">[08] Tổng doanh thu · [09] Không chịu GTGT · [10] Thuế suất 0% · '
+    + '[11] Thuế GTGT · [12] Doanh thu chịu thuế · [13] Doanh thu được trừ · [14] Thuế TNCN</td></tr>'
+    + rows
+    + '<tr><td>[18]</td><th>Cộng</th><th class="r num">' + money(t.rev) + '</th>'
+    + '<td class="r num">' + money(t.exempt) + '</td><td class="r num">' + money(t.zero) + '</td>'
+    + '<th class="r num">' + money(t.vat) + '</th><th class="r num">' + money(t.pitBase) + '</th>'
+    + '<td class="r num">' + money(t.deduct) + '</td><th class="r num">' + money(t.pit) + '</th></tr></table>'
+    + '<table><tr><td>[19] Số thuế được miễn, giảm</td><td class="r num">' + money(t.exemptTax) + '</td></tr>'
+    + '<tr><td>Tổng số thuế phải nộp</td><td class="r num">' + money(t.total) + '</td></tr>'
+    + '<tr><td>Số thuế đã nộp</td><td class="r num">' + money(d.paid) + '</td></tr>'
+    + '<tr><th>[20] Số thuế còn phải nộp</th><th class="r num">' + money(t.remaining) + '</th></tr></table>'
+    + '<div class="small">' + esc(d.note || '') + '</div>'
+    + '<div class="sign"><div>Người khai<br><br><br>(Ký, ghi rõ họ tên)</div>'
+    + '<div>Cơ quan thuế<br><br><br>(Xác nhận)</div></div></div>');
 }
 
 /* ---------------------------- bấm nút ---------------------------- */
@@ -713,6 +803,61 @@ document.addEventListener('click', (e) => {
 
     /* thuế */
     case 'printTax': printTax(); break;
+
+    /* sản xuất */
+    case 'addProduction': sheet(productionForm()); break;
+    case 'saveProduction': {
+      const pid = val('prProduct'), qty = numv('prQty');
+      if (!pid || qty <= 0){ toast('Cần chọn thành phẩm và số lượng'); break; }
+      const items = prods();
+      const mats = [1, 2, 3].map(i => {
+        const mp = val('prM' + i + 'Pid');
+        const name = val('prM' + i + 'Name')
+          || (mp ? ((items.find(x => x.id === mp) || {}).name || '') : '');
+        return { pid:mp, name:name, qty:numv('prM' + i + 'Qty'), price:numv('prM' + i + 'Price') };
+      }).filter(m => m.name || m.pid || m.qty || m.price);
+      const b = { id:uid(), hid:S.hid, code:val('prCode') || prodCode(),
+        date:val('prDate') || todayISO(), productId:pid, qty:qty, materials:mats,
+        labor:numv('prLabor'), overhead:numv('prOverhead'), note:val('prNote'), applied:false };
+      if (!S.data.production) S.data.production = [];
+      S.data.production.push(b);
+      applyProduction(b);
+      saveAll(); closeSheet(); go('production'); toast('Đã lưu phiếu sản xuất ' + b.code);
+      break;
+    }
+    case 'delProduction': {
+      const b = (S.data.production || []).find(x => x.id === id);
+      if (!b) break;
+      if (!confirm('Xóa phiếu sản xuất ' + b.code + '? Tồn kho sẽ được hoàn lại.')) break;
+      undoProduction(b);
+      S.data.production = S.data.production.filter(x => x.id !== id);
+      saveAll(); render(); toast('Đã xóa phiếu sản xuất');
+      break;
+    }
+    case 'printProduction': {
+      const b = (S.data.production || []).find(x => x.id === id);
+      if (b) printProduction(b);
+      break;
+    }
+
+    /* bản nháp tờ khai 01/CNKD */
+    case 'saveDeclAdj': {
+      const d = declarationData(S.hid, S.taxYear, S.taxMonth, S._declMethod) || {};
+      const keys = ((d.groups && d.groups.length ? d.groups : GROUPS)).map(g => g.k || g.key).filter(Boolean);
+      keys.forEach(k => {
+        declAdjSet(S.hid, S.taxYear, S.taxMonth, k, 'exempt', numv('dEx_' + k));
+        declAdjSet(S.hid, S.taxYear, S.taxMonth, k, 'zero', numv('dZero_' + k));
+      });
+      saveAll(); render(); toast('Đã lưu điều chỉnh tờ khai');
+      break;
+    }
+    case 'printDeclaration': printDeclaration(); break;
+    case 'exportDeclaration': {
+      const d = declarationData(S.hid, S.taxYear, S.taxMonth, S._declMethod);
+      downloadText('to-khai-01-CNKD-' + S.taxYear + '-' + S.taxMonth + '.json', JSON.stringify(d, null, 2));
+      toast('Đã xuất tệp tờ khai');
+      break;
+    }
     case 'saveTaxPay': {
       const r = taxCalc(S.hid, S.taxYear, S.taxMonth);
       sheet('<h2>Ghi nhận số đã nộp</h2>'
@@ -830,14 +975,17 @@ document.addEventListener('input', (e) => {
   if (t.id === 'bookMonth'){ S.bookMonth = t.value || S.bookMonth; render(); return; }
   if (t.id === 'taxYear'){ S.taxYear = Number(t.value) || new Date().getFullYear(); render(); return; }
   if (t.id === 'taxMonth'){ S.taxMonth = Number(t.value) || 0; render(); return; }
+  if (t.id === 'declYear'){ S.taxYear = Number(t.value) || new Date().getFullYear(); render(); return; }
+  if (t.id === 'declMonth'){ S.taxMonth = Number(t.value) || 0; render(); return; }
+  if (t.id === 'declMethod'){ S._declMethod = t.value === 'A' ? 'A' : 'B'; render(); return; }
 });
 
 /* ---------------------------- phím tắt trên máy tính ---------------------------- */
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape'){ closeSheet(); return; }
   if (!e.altKey) return;
-  const routes = ['home', 'sell', 'book', 'tax', 'menu', 'purchases', 'stock', 'data'];
-  const i = Number(e.key) - 1;
+  const routes = ['home', 'sell', 'book', 'tax', 'menu', 'purchases', 'stock', 'data', 'production', 'declaration'];
+  const i = Number(e.key === '0' ? '10' : e.key) - 1;
   if (i >= 0 && i < routes.length){ e.preventDefault(); go(routes[i]); }
 });
 

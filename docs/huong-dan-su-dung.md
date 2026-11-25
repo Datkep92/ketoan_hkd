@@ -191,7 +191,40 @@ không gửi dữ liệu đi đâu.
   `invoices`; mỗi phiếu có `code`, `date`, `partner`, `pay`, `lines` (tên hàng,
   nhóm thuế, số lượng, đơn giá). Trang này có sẵn ví dụ để copy.
 
-## 15. Phần mềm không làm gì (giới hạn)
+## 15. Sản xuất: tính giá thành
+
+Menu → **Sản xuất** (phím tắt Alt+9). Mỗi lô gồm: mã lô tự tăng, ngày, thành
+phẩm, số lượng làm ra, tối đa ba dòng nguyên liệu, tiền nhân công, chi phí chung
+và ghi chú. Với mỗi dòng nguyên liệu bạn có thể chọn một mặt hàng đã có trong
+kho: khi lưu, phần mềm **trừ tồn nguyên liệu**, cộng tồn thành phẩm và cập nhật
+**giá vốn bình quân** theo đúng đơn giá tính được. Dòng nguyên liệu chỉ ghi tên
+cũng được, khi đó phần mềm chỉ tính tiền, không trừ tồn.
+
+- **In** phiếu lô sản xuất để đối chiếu; đây là phiếu nội bộ, **không phải hóa đơn**.
+- **Xóa** lô có xác nhận: tồn kho và giá vốn được trả về như trước khi lưu.
+- Tiền nguyên liệu + nhân công + chi phí chung được cộng vào chi phí tính thuế
+  TNCN cách A khi bạn chọn cách tính "trên thu nhập sau chi phí". Vì vậy **đừng
+  ghi trùng** tiền nhân công/chi phí chung này ở mục 8.
+
+## 16. Lên bản nháp tờ khai 01/CNKD
+
+Menu → **Tờ khai** (phím tắt Alt+0), hoặc từ màn **Thuế** bấm **Lên tờ khai
+01/CNKD**. Phần mềm lấy số từ doanh thu đã ghi và chính sách thuế (mục 12) để
+điền bản nháp theo **mẫu số 01/CNKD** (Thông tư 50/2026/TT-BTC), gồm các chỉ
+tiêu [08] đến [20]: doanh thu theo nhóm ngành, thuế GTGT, doanh thu được trừ,
+thuế TNCN theo cách A hoặc B, tổng số thuế và số còn phải nộp.
+
+- Chọn **Năm**, **Kỳ** (Cả năm hoặc từng tháng) và **Cách tính TNCN** ở đầu trang.
+- Ô **doanh thu không chịu thuế GTGT** và **doanh thu chịu thuế suất 0%** cho
+  từng nhóm được phép sửa tay, rồi bấm **Lưu điều chỉnh**; phần mềm tính lại ngay.
+- **In tờ khai** mở hộp thoại in của trình duyệt (In hoặc Lưu thành PDF).
+  **Xuất JSON** tải bản nháp về máy để đối chiếu hoặc nhập sang nơi khác.
+- Đây là **bản nháp tự tính, không thay thế tờ khai chính thức**, không nộp thay
+  bạn qua T-VAN hay kênh của cơ quan thuế. Các phần thuế tiêu thụ đặc biệt, thuế
+  tài nguyên, bảo vệ môi trường và địa điểm kinh doanh khác **không tự điền** —
+  phải kiểm tra và khai bổ sung theo hồ sơ thực tế.
+
+## 17. Phần mềm không làm gì (giới hạn)
 
 - Không phát hành **hóa đơn điện tử** và không **nộp tờ khai** thay bạn; việc đó
   vẫn phải qua kênh chính thức của cơ quan thuế.
@@ -204,7 +237,7 @@ không gửi dữ liệu đi đâu.
 - Dữ liệu nằm trong trình duyệt của máy. Xóa "dữ liệu trang web" trong cài đặt
   trình duyệt là mất sạch — hãy sao lưu (mục 11).
 
-## 16. Khi có trục trặc
+## 18. Khi có trục trặc
 
 | Hiện tượng | Cách xử lý |
 |---|---|

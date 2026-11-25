@@ -297,6 +297,32 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   ck('trả hàng hoàn tồn', g('S.data.products[0].stock') === 99);
   ck('trả hàng hoàn công nợ', g('S.data.suppliers[0].debt') === 0);
 
+  console.log('== Sản xuất, tính giá thành ==');
+  g("go('production')");
+  ck('màn sản xuất có nút thêm', el('app').innerHTML.includes('data-act="addProduction"'));
+  click('addProduction');
+  ck('mở cửa sổ lô sản xuất', el('sheetBox').innerHTML.includes('id="prQty"'));
+  const fgStock = g('S.data.products[0].stock'), rmStock = g('S.data.products[2].stock');
+  const matPid = g('S.data.products[2].id');
+  setVal('prDate', g('todayISO()')); setVal('prProduct', pid1); setVal('prQty', '10');
+  setVal('prM1Pid', matPid); setVal('prM1Name', ''); setVal('prM1Qty', '2'); setVal('prM1Price', '20000');
+  setVal('prLabor', '50000'); setVal('prOverhead', '10000');
+  click('saveProduction');
+  ck('lưu lô sản xuất', g('S.data.production.length') === 1);
+  ck('mã lô tự tăng', g('S.data.production[0].code') === 'SX001');
+  const batchId = g('S.data.production[0].id');
+  ck('tính đúng tiền nguyên liệu', g('prodBatchCost(S.data.production[0]).materials') === 40000);
+  ck('tính đúng thành tiền', g('prodBatchCost(S.data.production[0]).total') === 100000);
+  ck('đơn giá thành phẩm', g('prodBatchCost(S.data.production[0]).unit') === 10000);
+  ck('đã nhập kho thành phẩm', g('S.data.production[0].applied') === true);
+  ck('cộng tồn thành phẩm', g('S.data.products[0].stock') === fgStock + 10);
+  ck('trừ tồn nguyên liệu (không âm)', g('S.data.products[2].stock') === Math.max(0, rmStock - 2));
+  ck('chi phí sản xuất lũy kế', g('productionCostYear(S.hid, new Date().getFullYear())') === 100000);
+  ck('chi phí sản xuất vào thuế cách A',
+    g('taxCalc(S.hid, new Date().getFullYear(), 0).expAll') === g('taxCalc(S.hid, new Date().getFullYear(), 0).expYear') + 100000);
+  await sleep(80); click('printProduction', batchId); await sleep(80);
+  ck('in phiếu sản xuất', printed[printed.length - 1].includes('PHIẾU SẢN XUẤT'));
+
   console.log('== Sổ sách và in ấn ==');
   g("go('book')");
   const month = new Date().toISOString().slice(0, 7);
@@ -330,6 +356,36 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await sleep(80);
   ck('in tư vấn thuế', printed[printed.length - 1].includes('TƯ VẤN THUẾ'));
   ck('bản in có hai cách tính', printed[printed.length - 1].includes('cách A') && printed[printed.length - 1].includes('cách B'));
+
+  console.log('== Tờ khai 01/CNKD ==');
+  ck('màn thuế có lối lên tờ khai', el('app').innerHTML.includes('data-route="declaration"'));
+  g("go('declaration')");
+  ck('màn tờ khai có đúng mẫu', el('app').innerHTML.includes('Mẫu số 01/CNKD'));
+  ck('tờ khai có đủ chỉ tiêu',
+    ['[08]','[09]','[10]','[11]','[12]','[13]','[14]','[18]','[19]','[20]'].every(x => el('app').innerHTML.includes(x)));
+  setVal('declYear', '2026'); dispatch('input', { id:'declYear', value:'2026' });
+  setVal('declMethod', 'A'); dispatch('input', { id:'declMethod', value:'A' });
+  ck('đổi cách tính TNCN trên tờ khai', g('S._declMethod') === 'A');
+  ck('tờ khai có sáu nhóm ngành', g("declarationData(S.hid, 2026, S.taxMonth, 'A').groups.length") === 6);
+  ck('tổng doanh thu tờ khai khớp tính thuế',
+    g("declarationData(S.hid, 2026, S.taxMonth, 'A').totals.rev") === g('taxCalc(S.hid, 2026, S.taxMonth).revPeriod'));
+  const vatTruoc = g("declarationData(S.hid, 2026, S.taxMonth, 'A').groups[0].vat");
+  setVal('dEx_goods', '1000'); dispatch('input', { id:'dEx_goods', value:'1000' });
+  click('saveDeclAdj');
+  ck('lưu điều chỉnh doanh thu không chịu thuế',
+    g("declAdjGet(S.hid, 2026, S.taxMonth, 'goods').exempt") === 1000);
+  ck('điều chỉnh làm giảm thuế GTGT',
+    g("declarationData(S.hid, 2026, S.taxMonth, 'A').groups[0].vat") < vatTruoc);
+  click('printDeclaration'); await sleep(80);
+  ck('in tờ khai 01/CNKD', printed[printed.length - 1].toUpperCase().includes('MẪU SỐ 01/CNKD')
+    && printed[printed.length - 1].includes('không thay thế tờ khai chính thức'));
+  click('exportDeclaration'); await sleep(20);
+  ck('xuất JSON tờ khai', lastAnchor.download.startsWith('to-khai-01-CNKD-'));
+  ck('JSON tờ khai có số liệu', downloads[downloads.length - 1].text.includes('"totals"'));
+  click('delProduction', batchId);
+  ck('xóa lô sản xuất', g('S.data.production.length') === 0);
+  ck('xóa lô hoàn tồn thành phẩm', g('S.data.products[0].stock') === fgStock);
+  ck('xóa lô hoàn tồn nguyên liệu', g('S.data.products[2].stock') === rmStock);
 
   console.log('== Chính sách thuế ==');
   g("go('policy')");
@@ -445,7 +501,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     products:'Quản lý hàng hóa', purchases:'Phiếu nhập hàng', suppliers:'Nhà cung cấp',
     stock:'Tồn kho', data:'Cổng dữ liệu hóa đơn', book:'Sổ sách', tax:'Tính thuế ước tính',
     customers:'Khách hàng', expenses:'Chi phí', policy:'Chính sách thuế',
-    menu:'Menu', help:'Trợ giúp'
+    production:'Quản lý sản xuất', declaration:'Mẫu số 01/CNKD', menu:'Menu', help:'Trợ giúp'
   };
   for (const r of Object.keys(routes)){
     g('go(' + JSON.stringify(r) + ')');
@@ -487,17 +543,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   console.log('== Kiểm tra cấu trúc điều hướng ==');
   const viewKeys = [...code.matchAll(/VIEWS\.(\w+)\s*=\s*function/g)].map(m => m[1]);
   ck('có đủ màn hình chính', ['setup','home','sell','products','purchases','suppliers','stock','data',
-    'book','tax','customers','expenses','policy','menu','help'].every(k => viewKeys.includes(k)));
+    'book','tax','customers','expenses','policy','production','declaration','menu','help'].every(k => viewKeys.includes(k)));
   const navRoutes = [...viewsHtml.matchAll(/nav\('(\w+)'/g)].map(m => m[1]).concat(
     [...shellHtml.matchAll(/data-route="(\w+)"/g)].map(m => m[1]));
   ck('mọi mục Menu trỏ tới màn có thật', navRoutes.every(r => viewKeys.includes(r) || r === 'setup'));
-  ck('Menu có bốn mục quản lý', ['products','customers','expenses','policy'].every(r => navRoutes.includes(r)));
+  ck('Menu có đủ mục quản lý', ['products','customers','expenses','policy','production'].every(r => navRoutes.includes(r)));
+  ck('Menu có lối vào tờ khai', navRoutes.includes('declaration'));
   const acts = new Set([...viewsHtml.matchAll(/data-act="(\w+)"/g)].map(m => m[1])
     .concat([...viewsHtml.matchAll(/item\('(\w+)'/g)].map(m => m[1])));
   const cases = new Set([...code.matchAll(/case '(\w+)':/g)].map(m => m[1]));
   const missing = [...acts].filter(a => !cases.has(a));
   ck('mọi nút đều có xử lý (' + missing.join(',') + ')', missing.length === 0);
-  ['sellSearch','prodSearch','bookMonth','taxYear','taxMonth'].forEach(id =>
+  ['sellSearch','prodSearch','bookMonth','taxYear','taxMonth','declYear','declMonth','declMethod'].forEach(id =>
     ck('ô ' + id + ' có bộ lọc nhập liệu', code.includes("t.id === '" + id + "'")));
   ck('xử lý tab dưới cùng', code.includes('tab.dataset.route'));
   ck('không vẽ trùng hai lần lúc nạp', !/render\(\);\s*render\(\);/.test(code));
@@ -517,6 +574,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   ck('Alt+7 mở Tồn kho', g('S.route') === 'stock');
   dispatch('keydown', { key:'8', altKey:true });
   ck('Alt+8 mở Cổng dữ liệu', g('S.route') === 'data');
+  dispatch('keydown', { key:'9', altKey:true });
+  ck('Alt+9 mở Sản xuất', g('S.route') === 'production');
+  dispatch('keydown', { key:'0', altKey:true });
+  ck('Alt+0 mở Tờ khai', g('S.route') === 'declaration');
 
   console.log('== Dữ liệu mẫu ==');
   g("go('setup')");
@@ -537,6 +598,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   ck('có đủ chi phí mẫu', g('S.data.expenses.length') === 8);
   ck('có thu nợ và trả nợ mẫu', g('S.data.payments.length') === 2 && g('S.data.supplierPayments.length') === 2);
   ck('có kiểm kê và số đã nộp mẫu', g('S.data.stockAdj.length') === 1 && g('S.data.taxpay.length') === 1);
+  ck('có lô sản xuất mẫu đã nhập kho', g('S.data.production.length') === 1 && g('S.data.production[0].applied') === true);
   ck('ngưỡng mẫu được áp dụng', g('P().threshold') === 50000000);
   ck('doanh thu mẫu đủ lớn để tính thuế', g('S.data.invoices.reduce((a,i) => a + i.total, 0)') > 50000000);
   ck('tính thuế chạy được với dữ liệu mẫu', g('taxCalc(S.hid, new Date().getFullYear(), 0).revYear') > 0);

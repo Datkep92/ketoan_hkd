@@ -32,12 +32,13 @@ NODE_REAL="$(dirname "$(which node)")/node.real"
 "$NODE_REAL" --jitless --no-expose-wasm Scripts/smoke_app.mjs
 ```
 
-Lần chạy gần nhất: **142 điều đúng, 0 sai**. `Scripts/smoke_app.mjs` dựng DOM
+Lần chạy gần nhất: **267 điều đúng, 0 sai**. `Scripts/smoke_app.mjs` dựng DOM
 tối thiểu, nạp `index.html` + ba tệp JS vào Node rồi bấm thử: thiết lập hộ →
-hàng hóa → bán/giảm giá/tồn kho/in → khách nợ/thu nợ → chi phí → sổ sách →
-thuế và cấu hình chính sách → nhiều hộ → lưu trữ → sao lưu/nhập → vẽ mọi màn
-hình → số liệu thuế theo ví dụ luật → Menu, liên kết, phím tắt. Mỗi dòng `✓`
-là một điều đã kiểm; mã thoát 1 khi có dòng `✗`.
+hàng hóa → bán/giảm giá/tồn kho/in → khách nợ/thu nợ → chi phí → mua/trả hàng,
+nhà cung cấp, kiểm kê → sản xuất (trừ tồn, nhập kho, hoàn tồn khi xóa) → sổ
+sách → thuế, bản nháp 01/CNKD và cấu hình chính sách → nhiều hộ → lưu trữ →
+sao lưu/nhập → vẽ mọi màn hình → số liệu thuế theo ví dụ luật → Menu, liên kết,
+phím tắt. Mỗi dòng `✓` là một điều đã kiểm; mã thoát 1 khi có dòng `✗`.
 
 Hai phép kiểm đáng giữ, vì bắt được lỗi thật đã từng xảy ra:
 
@@ -90,14 +91,15 @@ xem bằng mắt trên máy tính.
 
 ## Trong app: chỗ nào ở đâu
 
-- `VIEWS.<tên>`: một màn hình (`setup`, `home`, `sell`, `products`, `book`,
-  `tax`, `customers`, `expenses`, `policy`, `menu`, `help`) — nằm trong `js/views.js`.
+- `VIEWS.<tên>`: một màn hình (`setup`, `home`, `sell`, `products`, `purchases`,
+  `suppliers`, `stock`, `data`, `book`, `tax`, `customers`, `expenses`, `policy`,
+  `production`, `declaration`, `menu`, `help`) — nằm trong `js/views.js`.
 - `render()` vẽ màn hình hiện tại; `go(route)` đổi màn hình, route không có thì
   quay về `home`.
 - Bộ xử lý bấm (`js/actions.js`): mọi hành động nằm trong `switch (act)`, `act`
   lấy từ `data-act`.
 - Bộ xử lý nhập liệu: ô nhập/ô chọn theo `id`; thẻ điều hướng theo `data-route`;
-  phím tắt Alt+1…Alt+5, Esc, Alt+2.
+  phím tắt Alt+1…Alt+9, Alt+0, Esc.
 - `P()` đọc chính sách thuế, `S.data` giữ dữ liệu, `Persist` lo lưu trữ,
   `taxCalc(hid, năm, kỳ)` tính thuế, `printHtml()`/`printInvoice()` lo in.
 

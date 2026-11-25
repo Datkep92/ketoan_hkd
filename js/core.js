@@ -136,6 +136,7 @@ const S = {
     households: [], products: [], invoices: [], customers: [],
     expenses: [], payments: [], taxpay: [],
     suppliers: [], purchases: [], supplierPayments: [], stockAdj: [],
+    production: [], declAdj: {},
     policy: null, settings: { backupAt: null, onboarded: false, cashStart: 0 }
   },
   hid: null,
@@ -147,7 +148,8 @@ const S = {
   taxYear: new Date().getFullYear(),
   taxMonth: 0,
   _sellQ: '',
-  _prodQ: ''
+  _prodQ: '',
+  _declMethod: 'B'
 };
 
 const P = () => Object.assign({}, DEFAULT_POLICY, S.data.policy || {});
@@ -164,6 +166,84 @@ const stockLogs = () => S.data.stockAdj.filter(a => a.hid === S.hid);
 function purCode(){
   const nums = purs().map(p => Number(String(p.code || '').replace(/\D/g, '')) || 0);
   return 'PN' + String(Math.max(0, ...nums) + 1).padStart(3, '0');
+}
+
+/* ---------------------------- sản xuất và điều chỉnh tờ khai ---------------------------- */
+const declAdjKey = (hid, year, month, k) => (hid || S.hid) + '-' + year + '-' + month + '-' + k;
+
+/* sinh mã phiếu sản xuất SX001, tăng theo số phiếu của hộ */
+function prodCode(hid){
+  const nums = (S.data.production || []).filter(b => b.hid === (hid || S.hid))
+    .map(b => Number(String(b.code || '').replace(/\D/g, '')) || 0);
+  return 'SX' + String(Math.max(0, ...nums) + 1).padStart(3, '0');
+}
+
+/* tính chi phí một lô sản xuất: nguyên liệu + nhân công + chi phí chung */
+function prodBatchCost(b){
+  const materials = sum((b.materials || []).map(m => n0(m.qty) * n0(m.price)));
+  const labor = n0(b.labor), overhead = n0(b.overhead);
+  const total = materials + labor + overhead;
+  const qty = n0(b.qty);
+  return { materials:materials, labor:labor, overhead:overhead,
+    total:total, unit:qty > 0 ? Math.round(total / qty) : 0 };
+}
+
+/* ghi lô sản xuất: nhập thành phẩm, trừ nguyên liệu, cập nhật giá vốn bình quân */
+function applyProduction(b){
+  if (b.applied) return;
+  const prod = b.productId ? S.data.products.find(x => x.id === b.productId) : null;
+  const unit = prodBatchCost(b).unit;
+  b.prevStock = prod ? n0(prod.stock) : 0;
+  b.prevCost = prod ? n0(prod.cost) : 0;
+  if (prod){
+    const qty = n0(b.qty);
+    prod.stock = b.prevStock + qty;
+    if (qty > 0 && prod.stock > 0){
+      prod.cost = Math.round((b.prevStock * b.prevCost + qty * unit) / prod.stock);
+    }
+  }
+  (b.materials || []).forEach(m => {
+    const mp = m.pid ? S.data.products.find(x => x.id === m.pid) : null;
+    if (mp){
+      m.prevStock = n0(mp.stock);
+      mp.stock = Math.max(0, m.prevStock - n0(m.qty));
+    }
+  });
+  b.applied = true;
+}
+
+/* hủy ghi lô sản xuất: hoàn tồn và giá vốn như trước khi ghi */
+function undoProduction(b){
+  if (!b.applied) return;
+  const prod = b.productId ? S.data.products.find(x => x.id === b.productId) : null;
+  if (prod){ prod.stock = n0(b.prevStock); prod.cost = n0(b.prevCost); }
+  (b.materials || []).forEach(m => {
+    const mp = m.pid ? S.data.products.find(x => x.id === m.pid) : null;
+    if (mp){
+      mp.stock = (typeof m.prevStock === 'number')
+        ? m.prevStock : n0(mp.stock) + n0(m.qty);
+    }
+  });
+  b.applied = false;
+}
+
+/* tổng chi phí sản xuất trong năm của hộ (chỉ lô đã ghi) */
+function productionCostYear(hid, year){
+  return sum((S.data.production || []).filter(b => b.applied
+    && b.hid === (hid || S.hid) && String(b.date || '').slice(0, 4) === String(year))
+    .map(b => prodBatchCost(b).total));
+}
+
+/* đọc/ghi điều chỉnh thủ công trên tờ khai theo hộ-năm-tháng-nhóm */
+function declAdjGet(hid, year, month, k){
+  return ((S.data.declAdj || {})[declAdjKey(hid, year, month, k)] || {});
+}
+function declAdjSet(hid, year, month, k, field, value){
+  if (['exempt','zero','deduct'].indexOf(field) < 0) return;
+  if (!S.data.declAdj) S.data.declAdj = {};
+  const key = declAdjKey(hid, year, month, k);
+  if (!S.data.declAdj[key]) S.data.declAdj[key] = {};
+  S.data.declAdj[key][field] = n0(value);
 }
 
 /* cập nhật tồn kho và công nợ khi ghi phiếu */
@@ -307,6 +387,8 @@ function taxCalc(hid, year, month){
   const revPeriod = sum(Object.values(byGroup));
   const revYear = revIn(year + '-01-01', year + '-12-31', hid);
   const expYear = expIn(year + '-01-01', year + '-12-31', hid);
+  const prodCostYear = productionCostYear(hid, year);
+  const expAll = expYear + prodCostYear;
   const branchNote = revYear > 3000000000
     ? 'Doanh thu năm trên 3 tỷ: năm nay vẫn giữ cách đang áp dụng, từ năm sau phải chuyển sang tính trên thu nhập (thu nhập × thuế suất). Phương pháp đã chọn giữ ổn định 02 năm liên tục.'
     : '';
@@ -323,7 +405,7 @@ function taxCalc(hid, year, month){
 
   /* TNCN cách A — theo bậc doanh thu năm, quy theo tỷ lệ doanh thu kỳ */
   const rateA = bracketRate(revYear);
-  const baseA = pol.bracketBase === 'income' ? Math.max(0, revYear - expYear) : revYear;
+  const baseA = pol.bracketBase === 'income' ? Math.max(0, revYear - expAll) : revYear;
   const annualA = baseA * rateA / 100;
   let tncnA = 0;
   if (overThreshold && revYear > 0) tncnA = n0(annualA * (revPeriod / revYear));
@@ -353,12 +435,62 @@ function taxCalc(hid, year, month){
   ).map(t => t.amount));
 
   return {
-    isYear, from, to, byGroup, revPeriod, revYear, expYear,
+    isYear, from, to, byGroup, revPeriod, revYear, expYear, prodCostYear, expAll,
     threshold: pol.threshold, thresholdSet, overThreshold,
     vat, tncnA, tncnB, allowB, rateA, baseA, annualA, baseB, baseByGroup,
     thresholdPart, reduceOn, paid,
     totalA: vat + tncnA, totalB: vat + tncnB, branchNote
   };
+}
+
+/* ---------------------------- bản nháp tờ khai 01/CNKD ---------------------------- */
+function declarationData(hid, year, month, method){
+  const r = taxCalc(hid, year, month), pol = P();
+  const m = String(method || S._declMethod || 'B').toUpperCase() === 'A' ? 'A' : 'B';
+  const defs = [
+    { k:'goods',   code:'a',  row:'1.1', name:GROUP_NAME('goods') },
+    { k:'service', code:'b',  row:'1.2', name:GROUP_NAME('service') },
+    { k:'rent',    code:'c',  row:'1.3', name:GROUP_NAME('rent') },
+    { k:'produce', code:'d',  row:'1.4', name:GROUP_NAME('produce') },
+    { k:'digital-content', code:'đ', row:'1.5', name:'Nội dung số' },
+    { k:'other',   code:'e',  row:'1.6', name:GROUP_NAME('other') }
+  ];
+  const groups = defs.map(d => {
+    const k = d.k, isDig = k === 'digital-content';
+    const rev = isDig ? 0 : n0(r.byGroup[k]);
+    const adj = isDig ? {} : declAdjGet(hid, year, month, k);
+    const exempt = Math.min(rev, n0(adj.exempt));
+    const zero = Math.min(rev - exempt, n0(adj.zero));
+    const vatRate = Number(pol.vat[k]) || 0;
+    const vat = n0((rev - exempt - zero) * vatRate / 100);
+    let deduct = (r.thresholdPart > 0 && r.revPeriod > 0)
+      ? n0(r.thresholdPart * rev / r.revPeriod) : 0;
+    deduct += n0(adj.deduct);
+    let pit = 0;
+    if (m === 'A'){
+      pit = r.revPeriod > 0 ? n0(r.tncnA * rev / r.revPeriod) : 0;
+    } else {
+      const share = r.baseB > 0 ? (n0(r.baseByGroup[k]) / r.baseB)
+        : (r.revPeriod > 0 ? rev / r.revPeriod : 0);
+      pit = n0(r.tncnB * share);
+    }
+    const pitBase = Math.max(0, rev - deduct);
+    return { k:k, code:d.code, row:d.row, name:d.name, rev:rev, exempt:exempt,
+      zero:zero, vatRate:vatRate, vat:vat, deduct:deduct, pitBase:pitBase, pit:pit };
+  });
+  const totals = {
+    rev:sum(groups.map(g => g.rev)), exempt:sum(groups.map(g => g.exempt)),
+    zero:sum(groups.map(g => g.zero)), vat:sum(groups.map(g => g.vat)),
+    deduct:sum(groups.map(g => g.deduct)), pit:sum(groups.map(g => g.pit))
+  };
+  totals.total = totals.vat + totals.pit;
+  totals.exemptTax = 0;
+  totals.remaining = Math.max(0, totals.vat + totals.pit - n0(r.paid));
+  const period = month ? ('Tháng ' + month + '/năm ' + year) : ('Cả năm ' + year);
+  const note = 'Bản nháp tờ khai 01/CNKD: các ô thuế tiêu thụ đặc biệt, thuế tài nguyên, '
+    + 'thuế bảo vệ môi trường và địa điểm khác không được tự điền.';
+  return { year:year, month:month, method:m, period:period, groups:groups,
+    totals:totals, paid:n0(r.paid), note:note };
 }
 
 /* ---------------------------- sổ theo dõi ---------------------------- */
@@ -627,6 +759,7 @@ function makeDemoData(){
     ],
     products:[], invoices:[], customers:[], expenses:[], payments:[], taxpay:[],
     suppliers:[], purchases:[], supplierPayments:[], stockAdj:[],
+    production:[], declAdj:{},
     policy:pol, settings:{ onboarded:true, backupAt:null, cashStart:30000000 }
   };
   const byName = (hid, name) => data.products.find(p => p.hid === hid
@@ -780,6 +913,15 @@ function makeDemoData(){
   data.taxpay.push({ id:'demo-tax1', hid:h1, year:new Date().getFullYear(), month:0,
     amount:1500000, date:day(9), note:'Đã nộp kỳ trước (mẫu)' });
 
+  /* một lô sản xuất mẫu: thành phẩm Gạo ST25, nguyên liệu có mã liên kết */
+  data.production.push({ id:'demo-prod1', hid:h1, code:'SX001', date:day(5),
+    productId:'demo-p1', product:'Gạo ST25', qty:10,
+    materials:[
+      { pid:'demo-p10', name:'Đường cát', qty:2, price:17500 },
+      { pid:'', name:'Gạo nguyên liệu', qty:12, price:18000 }
+    ],
+    labor:200000, overhead:100000, applied:false, note:'Dữ liệu mẫu' });
+
   /* hộ 2 — quán cà phê */
   const h2 = 'demo-h2';
   addProd(h2, 'demo-p101', 'Cà phê sữa đá', 'ly',  30000, 12000, 20, 'service');
@@ -809,5 +951,7 @@ function installDemoData(){
   S.bookMonth = todayISO().slice(0, 7);
   S.taxYear = new Date().getFullYear();
   S.taxMonth = 0;
+  const demoBatch = (S.data.production || []).find(b => b.hid === S.hid);
+  if (demoBatch) applyProduction(demoBatch);
   saveAll();
 }
