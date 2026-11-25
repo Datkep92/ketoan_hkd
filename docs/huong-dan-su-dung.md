@@ -2,13 +2,16 @@
 
 ## 1. Mở phần mềm lần đầu
 
-Phần mềm là **một tệp duy nhất**: `quan-ly-hkd.html`. Không cần cài, không cần
-mạng, không có tài khoản.
+Phần mềm là **một thư mục gồm** `index.html`, `css/style.css` và ba tệp trong
+`js/`. Giữ nguyên cấu trúc đó, rồi mở `index.html` bằng trình duyệt. Không cần
+cài đặt, không cần mạng, không có tài khoản.
 
-- Trên iPhone/iPad: lưu tệp vào Ứng dụng **Tệp**, rồi mở tệp bằng trình duyệt
-  (Safari). Nên mở trực tiếp bằng trình duyệt, không xem qua bản xem trước, để in
+- Trên máy tính: nháy đúp `index.html` để mở bằng Chrome/Edge/Safari.
+- Trên iPhone/iPad: lưu cả thư mục vào Ứng dụng **Tệp**, rồi mở `index.html`
+  bằng trình duyệt. Nếu Safari không tải được CSS/JS từ tệp_local, hãy dùng
+  trình duyệt hỗ trợ tệp_local hoặc một máy chủ nội bộ trong cùng máy — không
+  cần Internet. Nên mở bằng trình duyệt thật, không xem qua bản xem trước, để in
   và lưu dữ liệu hoạt động đầy đủ.
-- Trên máy tính: nháy đúp tệp để mở bằng Chrome/Edge/Safari.
 
 > **Điều quan trọng nhất:** dữ liệu nằm trong trình duyệt của chính máy đó. Mở tệp
 > bằng trình duyệt khác hoặc máy khác là thấy dữ liệu khác (trống). Vì vậy hãy
@@ -113,6 +116,9 @@ Mọi số liệu (hàng hóa, hóa đơn, khách, chi phí, thuế) đều theo
 
 ## 11. Sao lưu và nhập lại
 
+Hiện phần mềm **chưa tích hợp Google Drive**. Dữ liệu chỉ nằm trong trình duyệt
+của máy; cách sao lưu duy nhất là tệp JSON:
+
 - **Sao lưu dữ liệu:** Menu → Sao lưu dữ liệu. Trình duyệt tải về tệp
   `sao-luu-hkd-<ngày>.json`. Cất tệp ở nơi an toàn (iCloud Drive, email cho chính
   mình). **Làm mỗi tuần.**
@@ -122,7 +128,7 @@ Mọi số liệu (hàng hóa, hóa đơn, khách, chi phí, thuế) đều theo
 
 ## 12. Cấu hình chính sách thuế
 
-Menu → **Cấu hình chính sách thuế**. Đây là chỗ duy nhất để sửa các con số luật,
+Menu → **Chính sách thuế** (màn hình **Cấu hình chính sách thuế**). Đây là chỗ duy nhất để sửa các con số luật,
 khi quy định thay đổi thì sửa ở đây chứ không phải sửa phần mềm:
 
 - **Ngưỡng doanh thu** (đồng/năm; 0 = chưa đặt, có nút chọn nhanh 1 tỷ / 500 triệu

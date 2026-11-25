@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b6bcb">
+<title>Quản lý hộ kinh doanh</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="side">
+    <div class="brand">
+      <span class="mark">HKD</span>
+      <div><b>Quản lý hộ kinh doanh</b><small>Sổ sách · Thuế · In ấn</small></div>
+    </div>
+
+    <nav id="tabs" aria-label="Chức năng chính">
+      <button class="tab on" data-route="home"><span>▦</span>Hôm nay</button>
+      <button class="tab" data-route="sell"><span>＋</span>Bán hàng</button>
+      <button class="tab" data-route="book"><span>≡</span>Sổ sách</button>
+      <button class="tab" data-route="tax"><span>%</span>Thuế</button>
+      <button class="tab" data-route="menu"><span>☰</span>Menu</button>
+    </nav>
+
+    <nav id="more" aria-label="Khác">
+      <button data-act="route" data-route="products">Hàng hóa</button>
+      <button data-act="route" data-route="customers">Khách hàng</button>
+      <button data-act="route" data-route="expenses">Chi phí</button>
+      <button data-act="route" data-route="policy">Chính sách thuế</button>
+      <button data-act="backup">Sao lưu dữ liệu</button>
+      <button data-act="restore">Nhập dữ liệu</button>
+      <button data-act="help">Trợ giúp</button>
+    </nav>
+
+    <div class="side-foot" id="sideFoot">Dữ liệu lưu trong máy này</div>
+  </aside>
+
+  <div class="main">
+    <header id="top">
+      <button class="hh" data-act="switchHH">
+        <span class="dot" id="hhDot"></span>
+        <span id="hhName">Chưa có hộ</span>
+        <span class="car">▾</span>
+      </button>
+      <div class="sp"></div>
+      <span class="today" id="today"></span>
+      <button class="btn primary sm" data-act="route" data-route="sell">＋ Bán hàng</button>
+      <button class="icon" data-act="help" aria-label="Trợ giúp">?</button>
+    </header>
+
+    <main id="app"></main>
+  </div>
+</div>
+
+<div id="sheet"><div id="sheetBox"></div></div>
+<div id="print"></div>
+<div id="toast"></div>
+
+<script src="js/core.js"></script>
+<script src="js/views.js"></script>
+<script src="js/actions.js"></script>
+</body>
+</html>

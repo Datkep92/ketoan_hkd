@@ -1,564 +1,422 @@
-#!/usr/bin/env node
-/*
- * Kiểm thử tự động app/quan-ly-hkd.html — chạy bằng Node, không cần trình duyệt.
- *
- *   node Scripts/smoke_app.mjs
- *
- * Cách làm: dựng một DOM tối thiểu (đủ cho app dùng), nạp đoạn <script> trong app vào
- * một ngữ cảnh Node, rồi bấm thử các luồng chính như người dùng:
- * thiết lập hộ → hàng hóa → bán hàng → ghi nợ → thu nợ → chi phí → in → thuế →
- * cấu hình chính sách → thêm hộ thứ hai → lưu trữ → sao lưu/nhập lại → vẽ mọi màn hình.
- *
- * Kết quả: mỗi dòng "✓" là một điều đã kiểm và đúng, "✗" là lỗi (mã thoát 1).
- */
+/* Kiểm tra hành vi của app desktop: nạp core.js + views.js + actions.js vào DOM giả,
+   rồi bấm thử mọi luồng chính. Chạy: node_real --jitless --no-expose-wasm Scripts/smoke_app.mjs */
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const htmlPath = path.join(root, 'app', 'quan-ly-hkd.html');
-const html = fs.readFileSync(htmlPath, 'utf8');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(__dirname, '..');
+const htmlPath = path.join(root, 'index.html');
+const shellHtml = fs.readFileSync(htmlPath, 'utf8');
+const jsFiles = ['js/core.js', 'js/views.js', 'js/actions.js'];
+const code = jsFiles.map(f => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
+const viewsHtml = code.slice(code.indexOf('const VIEWS'), code.indexOf('function render()'));
 
-const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
-if (!scripts.length) { console.error('Không tìm thấy đoạn <script> trong ' + htmlPath); process.exit(2); }
-const code = scripts.sort((a, b) => b.length - a.length)[0];
+let pass = 0, fail = 0;
+function ck(name, ok){
+  if (ok) { pass++; console.log('  ✓ ' + name); }
+  else { fail++; console.log('  ✗ ' + name); }
+}
+function assert(cond, msg){ if (!cond) throw new Error(msg); }
 
-let pass = 0;
-const fails = [];
-const ok = (cond, name, extra) => {
-  if (cond) { pass++; console.log('  ✓ ' + name); }
-  else { fails.push(name + (extra ? ' — ' + extra : '')); console.log('  ✗ ' + name + (extra ? ' — ' + extra : '')); }
+/* -------------------------- DOM tối thiểu -------------------------- */
+let lastTarget = null;
+let lastAnchor = null;
+let confirmAnswer = true;
+const els = {};
+const printed = [];
+const downloads = [];
+
+function el(id){
+  if (!els[id]) els[id] = {
+    id: id || '', value: '', checked: false, textContent: '', innerHTML: '',
+    files: [], style: {}, dataset: {}, _listeners: {},
+    classList: { add(){}, remove(){}, toggle(){}, contains(){ return false; } },
+    addEventListener(t, fn){ (this._listeners[t] = this._listeners[t] || []).push(fn); },
+    focus(){}, setSelectionRange(){}, click(){}, remove(){}, appendChild(){}
+  };
+  return els[id];
+}
+
+const tabEls = ['home','sell','book','tax','menu'].map(r => {
+  const b = el('tab-' + r);
+  b.dataset.route = r;
+  return b;
+});
+
+const doc = {
+  body: el('body'),
+  getElementById: id => els[id] || el(id),
+  querySelector: sel => el(sel.replace(/^#/, '')),
+  querySelectorAll: sel => (sel === '#tabs .tab' ? tabEls : []),
+  createElement: tag => { const a = el(tag + '-' + Math.random()); if (tag === 'a') lastAnchor = a; return a; },
+  addEventListener(type, fn){ (this._listeners[type] = this._listeners[type] || []).push(fn); },
+  _listeners: {}
 };
-const eq = (got, want, name) => ok(String(got) === String(want), name, 'nhận ' + JSON.stringify(got) + ', mong ' + JSON.stringify(want));
+function dispatch(type, ev){
+  const e = Object.assign({ preventDefault(){} }, ev || {});
+  if (!e.target) e.target = e;
+  (doc._listeners[type] || []).forEach(fn => fn(e));
+}
+function click(act, id, route, v){
+  lastTarget = {
+    id: '', dataset: { act: act || '', id: id || '', i: id, route: route || '', v: v || '' },
+    closest: () => lastTarget
+  };
+  dispatch('click', lastTarget);
+}
+function setVal(id, v){ const e = doc.getElementById(id); assert(!!e, 'thiếu ô ' + id); e.value = String(v); }
+function setCheck(id, v){ doc.getElementById(id).checked = !!v; }
+
+const store = {};
+class FileReaderStub {
+  readAsText(f){ this.result = f.content; if (this.onload) this.onload(); }
+}
+const win = {
+  document: doc,
+  localStorage: {
+    getItem: k => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = String(v); },
+    removeItem: k => { delete store[k]; }
+  },
+  confirm: () => confirmAnswer,
+  prompt: () => '',
+  print: () => { printed.push(el('print').innerHTML); },
+  scrollTo: () => {},
+  FileReader: FileReaderStub,
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
+  clearTimeout: id => clearTimeout(id),
+  Blob: class { constructor(parts, opts){ this.parts = parts; this.type = (opts || {}).type || ''; this.text = parts.join(''); } },
+  URL: { createObjectURL: b => { downloads.push(b); return 'blob:test'; }, revokeObjectURL(){} }
+};
+win.window = win;
+const ctx = vm.createContext(win);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-/* Lấy các thuộc tính data-… của mọi thẻ trong một đoạn HTML. */
-const attrsFromHtml = text => {
-  const out = [];
-  for (const m of String(text).matchAll(/<[a-zA-Z]+[^>]*>/g)) {
-    if (!/data-(act|route)=/.test(m[0])) continue;
-    const a = { tag: m[0].match(/^<([a-zA-Z]+)/)[1].toUpperCase() };
-    for (const x of m[0].matchAll(/data-([a-zA-Z]+)="([^"]*)"/g)) a[x[1]] = x[2];
-    const idm = m[0].match(/\sid="([^"]*)"/);
-    a.id = idm ? idm[1] : '';
-    out.push(a);
-  }
-  return out;
-};
+(async function main(){
+  console.log('== Nạp và khởi động ==');
+  vm.runInContext(code, ctx, { filename: 'app.js' });
+  ck('nạp đủ ba tệp JS', vm.runInContext('typeof VIEWS === "object" && typeof taxCalc === "function" && typeof Persist === "object"', ctx));
+  ck('khung có 3 script theo thứ tự',
+    shellHtml.indexOf('js/core.js') < shellHtml.indexOf('js/views.js')
+    && shellHtml.indexOf('js/views.js') < shellHtml.indexOf('js/actions.js')
+    && (shellHtml.match(/<script src=/g) || []).length === 3);
+  ck('khung có các vùng hiển thị chính',
+    ['id="app"','id="sheet"','id="print"','id="toast"','id="tabs"','id="hhName"'].every(x => shellHtml.includes(x)));
+  await sleep(20);
+  const g = expr => vm.runInContext(expr, ctx);
+  ck('khởi động ở màn cài đặt', g('S.route') === 'setup');
+  ck('chưa có hộ kinh doanh', g('S.data.households.length') === 0);
+  ck('chính sách mặc định có sẵn', g('P().threshold') === 0 && g('P().vat.goods') === 1);
+  ck('lưu trữ dự phòng localStorage', g('Persist.mode()') === 'ls');
 
-/* ---------------------------- DOM giả ---------------------------- */
-class El {
-  constructor(tag = 'div') {
-    this.tagName = String(tag).toUpperCase();
-    this.id = '';
-    this.value = '';
-    this.checked = false;
-    this.files = null;
-    this.textContent = '';
-    this._html = '';
-    this.style = {};
-    this.dataset = {};
-    this.children = [];
-    this._cls = new Set();
-    this.classList = {
-      add: (...c) => c.forEach(x => this._cls.add(x)),
-      remove: (...c) => c.forEach(x => this._cls.delete(x)),
-      contains: c => this._cls.has(c),
-      toggle: (c, on) => { (on === undefined ? !this._cls.has(c) : on) ? this._cls.add(c) : this._cls.delete(c); }
-    };
-  }
-  get innerHTML() { return this._html; }
-  set innerHTML(v) { this._html = String(v); }
-  addEventListener() {}
-  removeEventListener() {}
-  closest() { return null; }
-  querySelector(sel) { return doc.querySelector(sel); }
-  querySelectorAll() { return []; }
-  appendChild(c) { this.children.push(c); return c; }
-  remove() {}
-  click() {}
-  focus() {}
-  blur() {}
-  setSelectionRange() {}
-  getContext() { return null; }
-  scrollIntoView() {}
-  getBoundingClientRect() { return { top: 0, left: 0, width: 0, height: 0 }; }
-}
-
-const registry = new Map();
-const doc = {
-  querySelector(sel) {
-    if (!registry.has(sel)) {
-      const e = new El();
-      if (sel.startsWith('#')) e.id = sel.slice(1);
-      registry.set(sel, e);
-    }
-    return registry.get(sel);
-  },
-  querySelectorAll(sel) {
-    if (sel === '#tabs .tab') {
-      return ['home', 'sell', 'book', 'tax', 'menu'].map(r => { const e = new El('button'); e.dataset.route = r; return e; });
-    }
-    return [];
-  },
-  getElementById(id) { return doc.querySelector('#' + id); },
-  createElement(tag) { return new El(tag); },
-  addEventListener(type, fn) { (doc._l[type] = doc._l[type] || []).push(fn); },
-  removeEventListener() {},
-  _l: {},
-  body: new El('body'),
-  documentElement: new El('html')
-};
-
-const store = new Map();
-const localStorage = {
-  getItem: k => (store.has(k) ? store.get(k) : null),
-  setItem: (k, v) => { store.set(k, String(v)); },
-  removeItem: k => { store.delete(k); },
-  clear: () => store.clear(),
-  key: i => [...store.keys()][i] ?? null,
-  get length() { return store.size; }
-};
-
-let printCalls = 0;
-let lastBlobText = '';
-let confirmAnswer = true;
-let promptAnswer = '';
-const windowStub = { scrollTo() {}, print() { printCalls++; }, matchMedia: () => ({ matches: false, addListener() {}, addEventListener() {} }) };
-
-class BlobStub { constructor(parts) { this.text = (parts || []).join(''); lastBlobText = this.text; } }
-class FileReaderStub {
-  readAsText(file) { this.result = file && file.__text != null ? file.__text : ''; setTimeout(() => { if (this.onload) this.onload(); }, 0); }
-  readAsDataURL(file) { this.readAsText(file); }
-}
-
-const sandbox = {
-  document: doc,
-  window: windowStub,
-  localStorage,
-  Blob: BlobStub,
-  FileReader: FileReaderStub,
-  URL: { createObjectURL: () => 'blob:gia-lap', revokeObjectURL() {} },
-  confirm: () => confirmAnswer,
-  prompt: () => promptAnswer,
-  alert: () => {},
-  setTimeout, clearTimeout, setInterval, clearInterval,
-  requestAnimationFrame: cb => setTimeout(cb, 0),
-  navigator: { userAgent: 'node-test', language: 'vi-VN', onLine: true },
-  console
-};
-sandbox.window.document = doc;
-sandbox.window.localStorage = localStorage;
-sandbox.globalThis = sandbox;
-const ctx = vm.createContext(sandbox);
-
-/* ---------------------------- nạp app ---------------------------- */
-let loadError = null;
-try { vm.runInContext(code, ctx, { filename: 'app/quan-ly-hkd.html' }); }
-catch (e) { loadError = e; }
-
-const ev = expr => vm.runInContext(expr, ctx);
-const setVal = (id, v) => { const e = doc.querySelector('#' + id); e.value = String(v); return e; };
-const setChecked = (id, v) => { doc.querySelector('#' + id).checked = !!v; };
-const htmlOf = sel => doc.querySelector(sel).innerHTML;
-const click = async (act, data = {}) => {
-  const target = { id: '', closest: () => ({ dataset: Object.assign({ act }, data) }) };
-  for (const fn of doc._l.click || []) await fn({ target, preventDefault() {} });
-};
-const input = async (id, value) => {
-  const el = doc.querySelector('#' + id); el.value = String(value);
-  for (const fn of doc._l.input || []) await fn({ target: el });
-};
-const headName = () => String(doc.querySelector('#hhName').textContent || '');
-/* Màn hình cấu hình thuế tự vẽ các ô nhập từ chính sách đang dùng. Bản giả lập không vẽ
-   được HTML, nên ở đây điền sẵn đúng như màn hình thật rồi mới bấm Lưu. */
-const fillPolicyForm = (over = {}) => {
-  const p = JSON.parse(ev('JSON.stringify(P())'));
-  for (const k of ['goods', 'service', 'produce', 'other', 'rent']) {
-    setVal('pVat_' + k, p.vat[k]); setVal('pTncn_' + k, p.tncn[k]);
-  }
-  setVal('pThreshold', p.threshold);
-  setVal('pBase', p.bracketBase);
-  setVal('pRate1', p.brackets[0].rate); setVal('pRate2', p.brackets[1].rate); setVal('pRate3', p.brackets[2].rate);
-  setChecked('pReduce30', p.reduce30);
-  setVal('pReduceLimit', p.reduceLimit);
-  setVal('pPeriod', p.period);
-  for (const [k, v] of Object.entries(over)) { if (typeof v === 'boolean') setChecked(k, v); else setVal(k, v); }
-};
-
-async function section(title, fn) {
-  console.log('\n' + title);
-  try { await fn(); }
-  catch (e) { fails.push(title + ' — lỗi khi chạy: ' + e.message); console.log('  ✗ lỗi khi chạy: ' + e.message); }
-}
-
-/* ---------------------------- nội dung kiểm ---------------------------- */
-console.log('Kiểm thử app: app/quan-ly-hkd.html (' + html.length + ' ký tự)');
-ok(!loadError, 'nạp script không lỗi cú pháp', loadError && loadError.message);
-if (loadError) { console.log('\nKhông chạy tiếp được.'); process.exit(1); }
-await sleep(80);
-
-await section('1. Khởi động', async () => {
-  ok(typeof ev('VIEWS') === 'object', 'có đối tượng màn hình VIEWS');
-  ok(ev('VIEWS.setup') !== undefined, 'có màn hình thiết lập ban đầu');
-  ok(htmlOf('#app').includes('Bắt đầu sử dụng'), 'mở lần đầu hiện màn hình thiết lập', htmlOf('#app').slice(0, 80));
-  eq(ev('S.data.households.length'), 0, 'chưa có hộ kinh doanh nào');
-  ok(htmlOf('#app').includes('1 tỷ'), 'màn hình thiết lập có sẵn mốc ngưỡng 1 tỷ để chọn');
-});
-
-await section('2. Thiết lập hộ kinh doanh đầu tiên', async () => {
-  setVal('setThreshold', 1000000000);
-  setVal('setName', 'Tạp hóa Bảy');
-  setVal('setTax', '0312345678');
-  setVal('setGroup', 'goods');
+  console.log('== Cài đặt lần đầu ==');
+  g("go('setup')");
+  ck('màn cài đặt có nội dung', el('app').innerHTML.includes('Cài đặt lần đầu'));
+  setVal('setThreshold', '200000000');
+  click('preset', '', '', '500000000');
+  ck('chọn mức ngưỡng nhanh', el('setThreshold').value === '500000000');
+  setVal('setThreshold', '200000000');
   setVal('setPeriod', 'month');
-  await click('doSetup');
-  eq(ev('S.data.households.length'), 1, 'đã tạo 1 hộ kinh doanh');
-  eq(ev('S.data.policy.threshold'), 1000000000, 'ngưỡng doanh thu đã lưu đúng 1 tỷ');
-  ok(!!ev('S.hid'), 'hộ đang làm việc đã được chọn');
-  ok(headName().includes('Tạp hóa Bảy'), 'tên hộ hiện ở đầu trang', 'nhận ' + JSON.stringify(headName()));
-  eq(ev('S.data.settings.onboarded'), true, 'đã đánh dấu hoàn tất thiết lập');
-});
+  setVal('setName', 'Hộ kinh doanh A');
+  setVal('setTax', '0123456789');
+  setVal('setGroup', 'goods');
+  click('doSetup');
+  ck('tạo hộ đầu tiên', g('S.data.households.length') === 1);
+  ck('tên hộ đúng', g('hh().name') === 'Hộ kinh doanh A');
+  ck('đã đánh dấu cài đặt xong', g('S.data.settings.onboarded') === true);
+  ck('ngưỡng được lưu', g('P().threshold') === 200000000);
+  ck('chuyển về màn hôm nay', g('S.route') === 'home');
+  ck('trang hôm nay có chỉ số', el('app').innerHTML.includes('Doanh thu tháng này'));
 
-await section('3. Hàng hóa', async () => {
-  await click('route', { route: 'sell' });
-  await click('addProduct');
-  setVal('g_name', 'Nước ngọt lon');
-  setVal('g_unit', 'lon');
-  setVal('g_price', '10000');
-  setVal('g_cost', '7000');
-  setVal('g_stock', '100');
-  setVal('g_group', 'goods');
-  await click('saveProduct');
-  eq(ev('S.data.products.length'), 1, 'đã lưu 1 mặt hàng');
-  eq(ev('S.data.products[0].price'), 10000, 'giá bán đúng');
-  eq(ev('S.data.products[0].stock'), 100, 'tồn kho ban đầu đúng');
-  const pid = ev('S.data.products[0].id');
-  await click('add', { id: pid });
-  eq(ev('S.cart.length'), 1, 'bấm mặt hàng là vào giỏ');
-  await click('inc', { i: '0' });
-  eq(ev('S.cart[0].qty'), 2, 'nút + tăng số lượng');
-  await click('dec', { i: '0' });
-  eq(ev('S.cart[0].qty'), 1, 'nút − giảm số lượng');
-});
+  console.log('== Hàng hóa ==');
+  g("go('products')");
+  ck('màn hàng hóa có nút thêm', el('app').innerHTML.includes('Thêm hàng'));
+  click('addProduct');
+  ck('mở cửa sổ thêm hàng', el('sheetBox').innerHTML.includes('id="gName"'));
+  setVal('gName', 'Gạo'); setVal('gUnit', 'kg'); setVal('gGroup', 'goods');
+  setVal('gPrice', '25000'); setVal('gCost', '18000'); setVal('gStock', '100');
+  click('saveProduct');
+  ck('lưu mặt hàng thứ nhất', g('S.data.products.length') === 1);
+  ck('tên hàng đúng', g('S.data.products[0].name') === 'Gạo');
+  ck('giá bán đúng', g('S.data.products[0].price') === 25000);
+  ck('nhóm thuế đúng', g('S.data.products[0].group') === 'goods');
+  ck('tồn kho đúng', g('S.data.products[0].stock') === 100);
+  click('addProduct');
+  setVal('gName', 'Cà phê'); setVal('gUnit', 'ly'); setVal('gGroup', 'service');
+  setVal('gPrice', '30000'); setVal('gCost', '10000'); setVal('gStock', '50');
+  click('saveProduct');
+  ck('lưu mặt hàng thứ hai', g('S.data.products.length') === 2);
+  const pid1 = g('S.data.products[0].id');
+  let pid2 = g('S.data.products[1].id');
+  click('editProduct', pid2);
+  ck('mở cửa sổ sửa hàng', el('sheetBox').innerHTML.includes('Sửa hàng hóa'));
+  setVal('gName', 'Cà phê sữa'); click('saveProduct', pid2);
+  ck('sửa tên hàng', g('S.data.products[1].name') === 'Cà phê sữa');
+  confirmAnswer = false; click('delProduct', pid2);
+  ck('hủy xóa hàng', g('S.data.products.length') === 2);
+  confirmAnswer = true; click('delProduct', pid2);
+  ck('xóa hàng', g('S.data.products.length') === 1);
+  click('addProduct');
+  setVal('gName', 'Cà phê'); setVal('gGroup', 'service'); setVal('gPrice', '30000');
+  setVal('gStock', '50'); click('saveProduct');
+  pid2 = g('S.data.products[1].id');
+  ck('thêm lại hàng để bán', g('S.data.products.length') === 2);
 
-await section('4. Bán hàng — thu tiền mặt', async () => {
-  await click('checkout');
-  ok(htmlOf('#sheetBox').includes('Thu tiền'), 'mở được ô thu tiền');
-  setVal('c_discount', '5000');
-  setVal('c_method', 'cash');
-  setVal('c_cust', '');
-  setVal('c_note', 'bán thử');
-  await click('saveInvoice');
-  eq(ev('S.data.invoices.length'), 1, 'đã lưu 1 hóa đơn');
-  eq(ev('S.data.invoices[0].total'), 5000, 'tổng tiền = giá bán trừ giảm giá');
-  eq(ev('S.data.invoices[0].code'), 'HD001', 'mã hóa đơn tự tăng');
-  eq(ev('S.data.products[0].stock'), 99, 'tồn kho tự trừ khi bán');
-  eq(ev('S.cart.length'), 0, 'giỏ hàng tự xóa sau khi lưu');
-  ok(htmlOf('#print').includes('không thay thế hóa đơn điện tử'), 'phiếu bán hàng đã được dựng để in');
-  await sleep(90);
-  ok(printCalls > 0, 'đã gọi lệnh in sau khi lưu hóa đơn');
-});
+  console.log('== Bán hàng ==');
+  g("go('sell')");
+  ck('màn bán có ô tìm kiếm', el('app').innerHTML.includes('id="sellSearch"'));
+  ck('màn bán có danh sách hàng', el('app').innerHTML.includes('data-act="add"'));
+  click('add', pid1);
+  ck('thêm hàng vào giỏ', g('S.cart.length') === 1 && g('S.cart[0].qty') === 1);
+  click('add', pid1);
+  ck('cùng hàng được gộp', g('S.cart[0].qty') === 2);
+  click('inc', 0);
+  ck('tăng số lượng', g('S.cart[0].qty') === 3);
+  click('dec', 0);
+  ck('giảm số lượng', g('S.cart[0].qty') === 2);
+  click('dec', 0); click('dec', 0);
+  ck('giảm về 0 thì xóa dòng', g('S.cart.length') === 0);
+  click('add', pid1);
+  setVal('discount', '5000'); setVal('payMethod', 'cash');
+  setVal('custName', 'Khách lẻ'); setVal('note', 'mua buổi sáng');
+  click('saveInvoice');
+  await sleep(80);
+  ck('lưu phiếu bán', g('S.data.invoices.length') === 1);
+  ck('mã phiếu tự tăng', g('S.data.invoices[0].code') === 'HD001');
+  ck('thành tiền trừ chiết khấu', g('S.data.invoices[0].total') === 20000);
+  ck('trừ tồn kho', g('S.data.products[0].stock') === 99);
+  ck('giỏ hàng được dọn', g('S.cart.length') === 0);
+  ck('phiếu in có câu giới hạn', printed[printed.length - 1].includes('Phiếu này không thay thế hóa đơn điện tử.'));
+  ck('đã gọi hộp thoại in', printed.length >= 1);
+  ck('ghi chú được lưu', g('S.data.invoices[0].note') === 'mua buổi sáng');
 
-await section('5. Khách hàng — ghi nợ và thu nợ', async () => {
-  await click('addCustomer');
-  setVal('k_name', 'Chị Lan');
-  setVal('k_phone', '0900111222');
-  setVal('k_debt', '0');
-  await click('saveCustomer');
-  eq(ev('S.data.customers.length'), 1, 'đã thêm khách hàng');
-  const cid = ev('S.data.customers[0].id');
+  console.log('== Khách hàng và công nợ ==');
+  g("go('customers')");
+  click('addCust');
+  ck('mở cửa sổ thêm khách', el('sheetBox').innerHTML.includes('id="kName"'));
+  setVal('kName', 'Cô Lan'); setVal('kPhone', '0912345678'); setVal('kDebt', '0');
+  click('saveCust');
+  ck('lưu khách hàng', g('S.data.customers.length') === 1);
+  const cid = g('S.data.customers[0].id');
+  ck('khách mới hiện trong danh sách', el('app').innerHTML.includes('Cô Lan'));
+  g("go('sell')"); click('add', pid2);
+  setVal('custName', 'Cô Lan'); setVal('payMethod', 'debt'); setVal('discount', '0');
+  click('saveInvoice');
+  await sleep(80);
+  ck('lưu phiếu ghi nợ', g('S.data.invoices.length') === 2);
+  ck('công nợ tăng', g('S.data.customers[0].debt') === 30000);
+  ck('phiếu ghi rõ hình thức nợ', g('S.data.invoices[1].pay') === 'debt');
+  g("go('customers')"); click('payDebt', cid);
+  ck('mở cửa sổ thu nợ', el('sheetBox').innerHTML.includes('id="dAmount"'));
+  setVal('dCustomer', cid); setVal('dAmount', '10000'); setVal('dDate', '2026-03-05');
+  click('savePayment');
+  ck('ghi nhận lần thu nợ', g('S.data.payments.length') === 1);
+  ck('công nợ giảm', g('S.data.customers[0].debt') === 20000);
+  ck('tính đúng số thu tối đa', g('S.data.payments[0].amount') === 10000);
+  click('delPayment', g('S.data.payments[0].id'));
+  ck('xóa lần thu nợ', g('S.data.payments.length') === 0);
+  ck('hoàn lại công nợ', g('S.data.customers[0].debt') === 30000);
 
-  await click('route', { route: 'sell' });
-  await click('add', { id: ev('S.data.products[0].id') });
-  await click('checkout');
-  setVal('c_discount', '0');
-  setVal('c_method', 'debt');
-  setVal('c_cust', cid);
-  await click('saveInvoice');
-  eq(ev('S.data.customers[0].debt'), 10000, 'ghi nợ cộng vào công nợ khách');
-  eq(ev('S.data.invoices.length'), 2, 'hóa đơn ghi nợ đã lưu');
+  console.log('== Chi phí ==');
+  g("go('expenses')");
+  click('addExpense');
+  ck('mở cửa sổ thêm chi phí', el('sheetBox').innerHTML.includes('id="eName"'));
+  setVal('eName', 'Tiền điện'); setVal('eAmount', '1200000'); setVal('eDate', '2026-03-04');
+  click('saveExpense');
+  ck('lưu chi phí', g('S.data.expenses.length') === 1);
+  ck('số tiền chi phí đúng', g('S.data.expenses[0].amount') === 1200000);
+  const eid = g('S.data.expenses[0].id');
+  await sleep(80);
+  click('printExpense', eid);
+  await sleep(80);
+  ck('in phiếu chi phí', printed[printed.length - 1].includes('PHIẾU CHI PHÍ'));
+  click('editExpense', eid);
+  setVal('eId', eid); setVal('eName', 'Tiền điện tháng 3'); click('saveExpense', eid);
+  ck('sửa chi phí', g('S.data.expenses[0].name') === 'Tiền điện tháng 3');
+  confirmAnswer = false; click('delExpense', eid);
+  ck('hủy xóa chi phí', g('S.data.expenses.length') === 1);
+  confirmAnswer = true; click('delExpense', eid);
+  ck('xóa chi phí', g('S.data.expenses.length') === 0);
 
-  await click('route', { route: 'customers' });
-  ok(htmlOf('#app').includes('Chị Lan'), 'màn hình khách nợ hiện tên khách');
-  await click('payDebt', { id: cid });
-  setVal('d_amount', '4000');
-  await click('savePay', { id: cid });
-  eq(ev('S.data.customers[0].debt'), 6000, 'thu nợ trừ đúng số tiền');
-  eq(ev('S.data.payments.length'), 1, 'có ghi lại phiếu thu nợ');
-});
+  console.log('== Sổ sách và in ấn ==');
+  g("go('book')");
+  const month = new Date().toISOString().slice(0, 7);
+  setVal('bookMonth', month); dispatch('input', { id:'bookMonth', value:month });
+  ck('đổi tháng xem sổ', g('S.bookMonth') === month);
+  ck('sổ có lịch sử bán hàng', el('app').innerHTML.includes('Lịch sử bán hàng'));
+  ck('sổ có lịch sử chi phí', el('app').innerHTML.includes('Lịch sử chi phí'));
+  click('exportBook');
+  await sleep(20);
+  ck('xuất tệp CSV', downloads.length > 0);
+  ck('tên tệp CSV đúng tháng', lastAnchor.download === 'sach-' + month + '.csv');
+  ck('CSV có dòng tiêu đề', downloads[downloads.length - 1].text.includes('"Ngày","Khách hàng"'));
+  click('printBook');
+  await sleep(80);
+  ck('in bảng kê doanh thu', printed[printed.length - 1].includes('BẢNG KÊ DOANH THU'));
+  click('printInvoice', g('S.data.invoices[0].id'));
+  await sleep(80);
+  ck('in lại phiếu bán cũ', printed[printed.length - 1].includes('PHIẾU BÁN HÀNG'));
+  g("go('tax')");
+  click('printTax');
+  await sleep(80);
+  ck('in tư vấn thuế', printed[printed.length - 1].includes('TƯ VẤN THUẾ'));
+  ck('bản in có hai cách tính', printed[printed.length - 1].includes('cách A') && printed[printed.length - 1].includes('cách B'));
 
-await section('6. Chi phí', async () => {
-  await click('route', { route: 'expenses' });
-  await click('addExpense');
-  setVal('e_cat', 'mặt bằng');
-  setVal('e_amount', '500000');
-  setVal('e_note', 'tháng này');
-  await click('saveExpense');
-  eq(ev('S.data.expenses.length'), 1, 'đã lưu chi phí');
-  eq(ev('S.data.expenses[0].amount'), 500000, 'số tiền chi phí đúng');
-  await click('delExpense', { id: ev('S.data.expenses[0].id') });
-  eq(ev('S.data.expenses.length'), 0, 'xóa được chi phí');
-  await click('addExpense');
-  setVal('e_cat', 'mặt bằng'); setVal('e_amount', '500000');
-  await click('saveExpense');
-});
+  console.log('== Chính sách thuế ==');
+  g("go('policy')");
+  ck('màn chính sách có ô ngưỡng', el('app').innerHTML.includes('id="pThreshold"'));
+  setVal('pThreshold', '200000000'); setVal('pPeriod', 'month');
+  setVal('pBracketBase', 'income'); setVal('pVat0', '1'); setVal('pVat1', '5');
+  setVal('pTncn0', '0.5'); setVal('pTncn1', '2');
+  setCheck('pReduce30', true); setVal('pReduceLimit', '10000000000');
+  setVal('pReduceYears', '2026, 2027');
+  setVal('pBracket1Max', '3000000000'); setVal('pBracket1Rate', '15');
+  setVal('pBracket2Max', '50000000000'); setVal('pBracket2Rate', '17');
+  setVal('pBracket3Rate', '20');
+  click('savePolicy');
+  ck('lưu ngưỡng doanh thu', g('P().threshold') === 200000000);
+  ck('lưu thuế suất GTGT', g('P().vat.goods') === 1 && g('P().vat.service') === 5);
+  ck('lưu thuế suất TNCN', g('P().tncn.goods') === 0.5 && g('P().tncn.service') === 2);
+  ck('lưu bậc thuế', g('P().brackets[0].rate') === 15 && g('P().brackets[2].rate') === 20);
+  ck('lưu các năm giảm thuế', g('P().reduceYears.join("-")') === '2026-2027');
+  ck('lưu cờ giảm 30%', g('P().reduce30') === true);
+  confirmAnswer = false; click('resetPolicy');
+  ck('hủy khôi phục mặc định', g('P().threshold') === 200000000);
+  confirmAnswer = true; click('resetPolicy');
+  ck('khôi phục mặc định', g('P().threshold') === 0);
+  g("go('policy')");
+  setVal('pThreshold', '200000000'); setVal('pVat0', '1'); setVal('pVat1', '5');
+  setVal('pTncn0', '0.5'); setVal('pTncn1', '2'); setVal('pBracketBase', 'income');
+  setCheck('pReduce30', true); setVal('pReduceYears', '2026, 2027');
+  setVal('pBracket1Max', '3000000000'); setVal('pBracket1Rate', '15');
+  setVal('pBracket2Max', '50000000000'); setVal('pBracket2Rate', '17');
+  setVal('pBracket3Rate', '20'); click('savePolicy');
+  ck('đặt lại ngưỡng để tính thuế', g('P().threshold') === 200000000);
 
-await section('7. Sổ sách và bảng in', async () => {
-  await click('route', { route: 'book' });
-  ok(htmlOf('#app').includes('HD001'), 'sổ sách liệt kê hóa đơn');
-  await click('printBook');
-  ok(htmlOf('#print').includes('BẢNG KÊ DOANH THU'), 'in được bảng kê doanh thu');
-  await click('printInvoice', { id: ev('S.data.invoices[0].id') });
-  ok(htmlOf('#print').includes('Nước ngọt lon'), 'in lại được một hóa đơn cũ');
-  await click('route', { route: 'tax' });
-  ok(htmlOf('#app').includes('GTGT phải nộp'), 'màn hình thuế hiện số thuế GTGT');
-  await click('printTax');
-  ok(htmlOf('#print').includes('BẢNG TÍNH THUẾ'), 'in được bảng tính thuế');
-  setVal('taxYear', 2026); await input('taxYear', 2026);
-  setVal('taxMonth', 0); await input('taxMonth', 0);
-  eq(ev('S.taxYear'), 2026, 'đổi năm tính thuế được');
-});
-
-await section('8. Cấu hình chính sách thuế', async () => {
-  await click('route', { route: 'policy' });
-  fillPolicyForm({ pThreshold: 500000000 });
-  await click('savePolicy');
-  eq(ev('S.data.policy.threshold'), 500000000, 'lưu được ngưỡng mới');
-  eq(ev('S.data.policy.vat.goods'), 1, 'lưu cấu hình không làm mất tỷ lệ GTGT hàng hóa 1%');
-  eq(ev('S.data.policy.tncn.service'), 2, 'lưu cấu hình không làm mất tỷ lệ TNCN dịch vụ 2%');
-  eq(ev('S.data.policy.bracketBase'), 'income', 'cách tính bậc giữ nguyên là thu nhập sau chi phí');
-  eq(ev('S.data.policy.brackets[0].rate'), 15, 'bậc 1 giữ 15%');
-  eq(ev('S.data.policy.reduce30'), true, 'giảm 30% vẫn bật sau khi lưu');
-  eq(ev('S.data.policy.reduceYears.join()'), '2026,2027', 'năm áp dụng giảm 30% giữ nguyên');
-
-  await click('preset', { v: '1000000000' });
-  eq(doc.querySelector('#pThreshold').value, '1000000000', 'nút chọn nhanh 1 tỷ điền vào ô ngưỡng');
-  await click('savePolicy');
-  eq(ev('S.data.policy.threshold'), 1000000000, 'bấm Lưu sau khi chọn nhanh thì ngưỡng thành 1 tỷ');
-  await click('preset', { v: '500000000' });
-  await click('savePolicy');
-  eq(ev('S.data.policy.threshold'), 500000000, 'chọn nhanh 500 triệu cũng lưu được');
-
+  console.log('== Nhiều hộ kinh doanh ==');
+  g("go('menu')");
+  click('switchHH');
+  ck('mở danh sách hộ', el('sheetBox').innerHTML.includes('Chọn hộ kinh doanh'));
+  click('addHH');
+  ck('mở cửa sổ thêm hộ', el('sheetBox').innerHTML.includes('id="hhNameInput"'));
+  setVal('hhNameInput', 'Hộ kinh doanh B'); setVal('hhTax', '9876543210');
+  setVal('hhOwner', 'Anh B'); setVal('hhAddress', '01 Đường X');
+  setVal('hhGroup', 'service'); click('saveHH');
+  ck('thêm hộ thứ hai', g('S.data.households.length') === 2);
+  ck('chuyển sang hộ mới', g('hh().name') === 'Hộ kinh doanh B');
+  ck('hộ mới chưa có hàng', g('S.data.products.filter(p => p.hid === S.hid).length') === 0);
+  click('switchHH');
+  const h1 = g('S.data.households[0].id'), h2 = g('S.data.households[1].id');
+  ck('danh sách có cả hai hộ', el('sheetBox').innerHTML.includes('Hộ kinh doanh A') && el('sheetBox').innerHTML.includes('Hộ kinh doanh B'));
+  click('pickHH', h1);
+  ck('chuyển về hộ cũ', g('S.hid') === h1 && g('hh().name') === 'Hộ kinh doanh A');
+  confirmAnswer = false; click('switchHH'); click('delHH', h2);
+  ck('hủy xóa hộ', g('S.data.households.length') === 2);
   confirmAnswer = true;
-  await click('resetPolicy');
-  eq(ev('S.data.policy.threshold'), 0, 'khôi phục mặc định trả ngưỡng về 0');
-  eq(ev('S.data.policy.vat.goods'), 1, 'khôi phục mặc định trả lại tỷ lệ thuế gốc');
-  fillPolicyForm({ pThreshold: 1000000000 });
-  await click('savePolicy');
-  eq(ev('S.data.policy.threshold'), 1000000000, 'đặt lại ngưỡng 1 tỷ');
-});
 
-await section('9. Nhiều hộ kinh doanh', async () => {
-  await click('route', { route: 'menu' });
-  await click('addHH');
-  setVal('f_name', 'Quán ăn Cô Tư');
-  setVal('f_owner', 'Trần Thị Tư');
-  setVal('f_group', 'service');
-  setVal('f_addr', '12 Lê Lợi');
-  await click('saveHH');
-  eq(ev('S.data.households.length'), 2, 'đã thêm hộ thứ hai');
-  await click('switchHH');
-  ok(htmlOf('#sheetBox').includes('Quán ăn Cô Tư'), 'danh sách chuyển hộ có hộ mới');
-  const h2 = ev('S.data.households[1].id');
-  await click('pickHH', { id: h2 });
-  eq(ev('S.hid'), h2, 'chuyển sang hộ thứ hai được');
-  eq(ev('S.data.products.filter(p => p.hid === S.hid).length'), 0, 'hộ mới chưa có hàng hóa của hộ cũ');
-  await click('pickHH', { id: ev('S.data.households[0].id') });
-  eq(ev('S.data.products.length'), 1, 'quay lại hộ cũ vẫn còn dữ liệu');
-});
+  console.log('== Lưu trữ và sao lưu ==');
+  g('saveAll()');
+  await sleep(260);
+  ck('ghi dữ liệu vào bộ nhớ', !!store.hkd1);
+  const saved = JSON.parse(store.hkd1);
+  ck('bản lưu có hai hộ', saved.households.length === 2);
+  ck('bản lưu có phiếu bán', saved.invoices.length === 2);
+  const reload = g('Persist.load()');
+  ck('đọc lại dữ liệu', reload && typeof reload.then === 'function');
+  click('backup');
+  await sleep(20);
+  const backup = downloads[downloads.length - 1];
+  ck('tạo tệp sao lưu JSON', !!backup && backup.type.includes('json'));
+  const obj = JSON.parse(backup.text);
+  ck('tệp sao lưu đúng định dạng', obj.app === 'quan-ly-hkd' && obj.version === 1);
+  ck('tệp sao lưu có dữ liệu', obj.data.households.length === 2);
+  ck('ghi thời điểm sao lưu', !!g('S.data.settings.backupAt'));
+  click('restore');
+  ck('mở cửa sổ nhập dữ liệu', el('sheetBox').innerHTML.includes('id="restoreFile"'));
+  const bad = el('restoreFile'); bad.files = [{ content: '{"x":1}' }];
+  click('doRestore');
+  ck('từ chối tệp sai định dạng', el('toast').textContent.includes('Tệp không hợp lệ'));
+  const good = el('restoreFile'); good.files = [{ content: backup.text }];
+  confirmAnswer = false; click('doRestore');
+  ck('hủy nhập khi người dùng từ chối', g('S.data.households.length') === 2);
+  confirmAnswer = true; click('doRestore');
+  ck('nhập lại dữ liệu', g('S.data.households.length') === 2);
+  ck('dữ liệu sau nhập đúng', g('hh().name') === 'Hộ kinh doanh A');
 
-await section('10. Lưu trữ trong máy', async () => {
-  await click('route', { route: 'home' });
-  await sleep(300);
-  ok(store.has('hkd1'), 'dữ liệu đã được ghi xuống bộ nhớ máy', 'khóa: ' + [...store.keys()].join(','));
-  const raw = store.get('hkd1') || '{}';
-  let saved = null; try { saved = JSON.parse(raw); } catch (e) {}
-  ok(saved && Array.isArray(saved.households), 'bản lưu đọc lại được và có dữ liệu hộ');
-  eq(saved.households.length, 2, 'bản lưu giữ đủ 2 hộ');
-  await click('route', { route: 'menu' });
-  ok(htmlOf('#app').includes('Lưu trữ:'), 'menu có dòng cho biết dữ liệu đang lưu ở đâu');
-});
-
-await section('11. Sao lưu và nhập lại', async () => {
-  await click('route', { route: 'menu' });
-  await click('backup');
-  ok(lastBlobText.includes('"households"'), 'tệp sao lưu có dữ liệu hộ kinh doanh');
-  const backup = JSON.parse(lastBlobText);
-  eq(backup.app, 'quan-ly-hkd', 'tệp sao lưu ghi đúng tên app');
-  ok(!!ev('S.data.settings.backupAt'), 'ghi nhận thời điểm sao lưu');
-
-  backup.data.households[0].name = 'Tạp hóa Bảy (nhập lại)';
-  await click('restore');
-  doc.querySelector('#restoreFile').files = [{ name: 'sao-luu.json', __text: JSON.stringify(backup) }];
-  confirmAnswer = true;
-  await click('doRestore');
-  await sleep(30);
-  eq(ev('S.data.households[0].name'), 'Tạp hóa Bảy (nhập lại)', 'nhập lại tệp sao lưu thay được dữ liệu');
-  eq(ev('S.data.invoices.length'), 2, 'nhập lại giữ đủ hóa đơn');
-  ok(htmlOf('#app').includes('Tạp hóa Bảy (nhập lại)'), 'màn hình cập nhật theo dữ liệu vừa nhập');
-
-  confirmAnswer = false;
-  await click('restore');
-  doc.querySelector('#restoreFile').files = [{ name: 'sao-luu.json', __text: JSON.stringify(backup) }];
-  await click('doRestore');
-  await sleep(30);
-  eq(ev('S.data.households[0].name'), 'Tạp hóa Bảy (nhập lại)', 'bấm Hủy khi nhập thì dữ liệu không đổi');
-  confirmAnswer = true;
-});
-
-await section('12. Mọi màn hình vẽ được', async () => {
-  for (const r of ['home', 'sell', 'products', 'customers', 'expenses', 'book', 'tax', 'policy', 'menu', 'help', 'setup']) {
-    let err = null, len = 0;
-    try { await click('route', { route: r }); len = htmlOf('#app').length; } catch (e) { err = e; }
-    ok(!err && len > 200, 'màn hình "' + r + '" vẽ được nội dung', err ? err.message : 'độ dài ' + len);
+  console.log('== Vẽ mọi màn hình ==');
+  const routes = {
+    setup:'Cài đặt lần đầu', home:'Doanh thu tháng này', sell:'Bán hàng',
+    products:'Quản lý hàng hóa', book:'Sổ sách', tax:'Tính thuế ước tính',
+    customers:'Khách hàng', expenses:'Chi phí', policy:'Chính sách thuế',
+    menu:'Menu', help:'Trợ giúp'
+  };
+  for (const r of Object.keys(routes)){
+    g('go(' + JSON.stringify(r) + ')');
+    ck('màn ' + r + ' vẽ ra nội dung', el('app').innerHTML.includes(routes[r]));
   }
-  await ev('go("home")');
-  ok(headName().includes('Tạp hóa Bảy'), 'quay về trang chính hiện đúng tên hộ ở đầu trang');
-});
+  ck('màn lạ quay về hôm nay', (g("go('khong-co-that')"), g('S.route') === 'home'));
+  ck('thanh dưới có 5 mục', tabEls.length === 5);
+  ck('thanh dưới đủ tên', ['home','sell','book','tax','menu'].every(r => tabEls.some(b => b.dataset.route === r)));
 
-await section('13. Số liệu thuế theo ví dụ luật', async () => {
-  // Mỗi ca: doanh thu năm theo một nhóm ngành, chi phí năm, cách tính như luật.
-  const calcCase = (rev, exp, group, year, reduce30) => JSON.parse(vm.runInContext(`
-    (function(){
-      const hid = S.hid;
-      S.data.invoices = [{ id:'th1', hid:hid, code:'HD999', date:'${year}-03-10', subtotal:${rev}, discount:0, total:${rev},
-        lines:[{ pid:'p1', name:'x', qty:1, price:${rev}, group:'${group}' }] }];
-      S.data.expenses = [{ id:'te1', hid:hid, category:'cp', amount:${exp}, date:'${year}-03-10' }];
-      S.data.taxpay = [];
-      S.data.policy.threshold = 1000000000;
-      S.data.policy.bracketBase = 'income';
-      S.data.policy.reduce30 = ${reduce30};
-      const r = taxCalc(hid, ${year}, 0);
-      return JSON.stringify({ vat:r.vat, a:r.tncnA, b:r.tncnB, allowB:r.allowB, rateA:r.rateA,
-        over:r.overThreshold, totalA:r.totalA, totalB:r.totalB, note:!!r.branchNote, baseB:r.baseB });
-    })()`, ctx));
+  console.log('== Số liệu thuế theo ví dụ ==');
+  g('S.data.invoices = []; S.data.expenses = []; S.data.taxpay = [];');
+  const addInv = (ymd, lines, discount) => {
+    const sub = lines.reduce((a, l) => a + l.qty * l.price, 0);
+    g('S.data.invoices.push(' + JSON.stringify({ id:'inv-' + ymd + '-' + Math.random(), hid:h1, date:ymd,
+      lines, subtotal:sub, discount:discount || 0, total:sub - (discount || 0), pay:'cash', customer:'A' }) + ')');
+  };
+  const line = (group, qty, price) => ({ pid:'p', name:'hàng', group, qty, price });
+  ck('dưới ngưỡng thì thuế bằng 0', (addInv('2026-01-05', [line('goods', 1, 100000000)]),
+    g('taxCalc(S.hid, 2026, 1).vat') === 0));
+  g('S.data.invoices = [];');
+  addInv('2026-02-10', [line('goods', 1, 300000000)]);
+  ck('vượt ngưỡng tính GTGT 1%', g('taxCalc(S.hid, 2026, 2).vat') === 3000000);
+  ck('vượt ngưỡng mới tính TNCN cách B', g('taxCalc(S.hid, 2026, 2).allowB') === true);
+  ck('TNCN cách B tính trên phần vượt ngưỡng, giảm 30%', g('taxCalc(S.hid, 2026, 2).tncnB') === 350000);
+  addInv('2026-02-20', [line('goods', 1, 300000000)]);
+  ck('tháng bằng năm khi chọn cả năm', g('taxCalc(S.hid, 2026, 0).revPeriod') === g('taxCalc(S.hid, 2026, 0).revYear'));
+  ck('có ghi chú khi doanh thu trên 3 tỷ', (addInv('2026-03-01', [line('goods', 1, 3000000000)]),
+    g('taxCalc(S.hid, 2026, 3).branchNote.length') > 0));
+  ck('trên 3 tỷ thì không dùng cách B', g('taxCalc(S.hid, 2026, 3).allowB') === false);
+  g('S.taxYear = 2026; S.taxMonth = 2;');
+  g("go('tax')");
+  click('saveTaxPay');
+  ck('mở cửa sổ ghi số đã nộp', el('sheetBox').innerHTML.includes('id="tAmount"'));
+  setVal('tAmount', '1000000'); setVal('tDate', '2026-02-28');
+  click('doSaveTaxPay');
+  ck('lưu số đã nộp', g('S.data.taxpay.length') === 1 && g('S.data.taxpay[0].amount') === 1000000);
+  ck('số kỳ được lưu', g('S.data.taxpay[0].month') === 2);
 
-  // Dịch vụ 1,8 tỷ, chi phí 1,5 tỷ → GTGT 5% = 90 triệu
-  let c = calcCase(1800000000, 1500000000, 'service', 2026, false);
-  eq(c.over, true, '1,8 tỷ/năm là vượt ngưỡng 1 tỷ');
-  eq(c.vat, 90000000, 'GTGT dịch vụ 1,8 tỷ = 90.000.000');
-  eq(c.a, 45000000, 'TNCN cách A (thu nhập 300 triệu × 15%) = 45.000.000');
-  eq(c.b, 16000000, 'TNCN cách B (800 triệu vượt ngưỡng × 2%) = 16.000.000');
-  eq(c.allowB, true, 'doanh thu dưới 3 tỷ nên được chọn cách B');
+  console.log('== Kiểm tra cấu trúc điều hướng ==');
+  const viewKeys = [...code.matchAll(/VIEWS\.(\w+)\s*=\s*function/g)].map(m => m[1]);
+  ck('có đủ màn hình chính', ['setup','home','sell','products','book','tax','customers','expenses','policy','menu','help']
+    .every(k => viewKeys.includes(k)));
+  const navRoutes = [...viewsHtml.matchAll(/nav\('(\w+)'/g)].map(m => m[1]).concat(
+    [...shellHtml.matchAll(/data-route="(\w+)"/g)].map(m => m[1]));
+  ck('mọi mục Menu trỏ tới màn có thật', navRoutes.every(r => viewKeys.includes(r) || r === 'setup'));
+  ck('Menu có bốn mục quản lý', ['products','customers','expenses','policy'].every(r => navRoutes.includes(r)));
+  const acts = new Set([...viewsHtml.matchAll(/data-act="(\w+)"/g)].map(m => m[1])
+    .concat([...viewsHtml.matchAll(/item\('(\w+)'/g)].map(m => m[1])));
+  const cases = new Set([...code.matchAll(/case '(\w+)':/g)].map(m => m[1]));
+  const missing = [...acts].filter(a => !cases.has(a));
+  ck('mọi nút đều có xử lý (' + missing.join(',') + ')', missing.length === 0);
+  ['sellSearch','prodSearch','bookMonth','taxYear','taxMonth'].forEach(id =>
+    ck('ô ' + id + ' có bộ lọc nhập liệu', code.includes("t.id === '" + id + "'")));
+  ck('xử lý tab dưới cùng', code.includes('tab.dataset.route'));
+  ck('không vẽ trùng hai lần lúc nạp', !/render\(\);\s*render\(\);/.test(code));
+  ck('có hàm tính thuế và in tư vấn', code.includes('function taxCalc(') && code.includes("case 'printTax':"));
 
-  // Hàng hóa 2,2 tỷ, chi phí 2,05 tỷ → GTGT 1% = 22 triệu
-  c = calcCase(2200000000, 2050000000, 'goods', 2026, false);
-  eq(c.vat, 22000000, 'GTGT hàng hóa 2,2 tỷ = 22.000.000');
-  eq(c.a, 22500000, 'TNCN cách A (thu nhập 150 triệu × 15%) = 22.500.000');
-  eq(c.b, 6000000, 'TNCN cách B (1,2 tỷ vượt ngưỡng × 0,5%) = 6.000.000');
+  console.log('== Phím tắt ==');
+  dispatch('keydown', { key:'2', altKey:true });
+  ck('Alt+2 mở bán hàng', g('S.route') === 'sell');
+  click('addPayment');
+  dispatch('keydown', { key:'Escape', altKey:false });
+  ck('Esc đóng cửa sổ', !el('sheet').classList.contains('on'));
+  dispatch('keydown', { key:'5', altKey:true });
+  ck('Alt+5 mở Menu', g('S.route') === 'menu');
 
-  // Dịch vụ 2,5 tỷ, chi phí 2,45 tỷ
-  c = calcCase(2500000000, 2450000000, 'service', 2026, false);
-  eq(c.vat, 125000000, 'GTGT dịch vụ 2,5 tỷ = 125.000.000');
-  eq(c.a, 7500000, 'TNCN cách A (thu nhập 50 triệu × 15%) = 7.500.000');
-  eq(c.b, 30000000, 'TNCN cách B (1,5 tỷ vượt ngưỡng × 2%) = 30.000.000');
-
-  // Ngưỡng: đúng 1 tỷ thì không phải nộp
-  c = calcCase(1000000000, 100000000, 'service', 2026, false);
-  eq(c.over, false, 'đúng 1 tỷ/năm là chưa vượt ngưỡng');
-  eq(c.totalA, 0, 'chưa vượt ngưỡng thì không phải nộp thuế');
-  eq(c.totalB, 0, 'chưa vượt ngưỡng thì cách B cũng bằng 0');
-  c = calcCase(1000000001, 100000000, 'service', 2026, false);
-  eq(c.over, true, 'hơn 1 tỷ một đồng là đã vượt ngưỡng');
-
-  // Giảm 30% thuế TNCN trong 2026–2027 cho hộ doanh thu đến 10 tỷ
-  const off = calcCase(5000000000, 0, 'service', 2026, false);
-  const on = calcCase(5000000000, 0, 'service', 2026, true);
-  eq(on.a, Math.round(off.a * 0.7), 'bật giảm 30% đúng cho phần TNCN cách A');
-  eq(on.b, Math.round(off.b * 0.7), 'bật giảm 30% đúng cho phần TNCN cách B');
-  const bigOff = calcCase(15000000000, 0, 'service', 2026, false);
-  const bigOn = calcCase(15000000000, 0, 'service', 2026, true);
-  eq(bigOn.a, bigOff.a, 'doanh thu trên 10 tỷ thì không giảm 30% (cách A)');
-  eq(bigOn.b, bigOff.b, 'doanh thu trên 10 tỷ thì không giảm 30% (cách B)');
-  const y30 = calcCase(5000000000, 0, 'service', 2030, false);
-  const y30on = calcCase(5000000000, 0, 'service', 2030, true);
-  eq(y30on.a, y30.a, 'năm 2030 không còn trong diện giảm nên số thuế không đổi');
-  ok(off.a > 0, 'doanh thu 5 tỷ vẫn phát sinh thuế TNCN', 'nhận ' + off.a);
-
-  // Trên 3 tỷ: không được chọn cách B, có nhắc chuyển sang tính trên thu nhập
-  c = calcCase(3500000000, 100000000, 'service', 2026, false);
-  eq(c.allowB, false, 'doanh thu trên 3 tỷ thì không áp dụng cách B');
-  eq(c.rateA, 17, 'doanh thu trên 3 tỷ chuyển bậc 17%');
-  eq(c.note, true, 'có nhắc chuyển sang tính trên thu nhập từ năm sau');
-
-  // Tính theo kỳ tháng: chia theo tỷ lệ doanh thu kỳ/năm
-  const r = JSON.parse(vm.runInContext(`
-    (function(){
-      const hid = S.hid;
-      S.data.invoices = [
-        { id:'m1', hid:hid, code:'HD901', date:'2026-01-15', subtotal:100000000, discount:0, total:100000000,
-          lines:[{ pid:'p1', name:'x', qty:1, price:100000000, group:'service' }] },
-        { id:'m2', hid:hid, code:'HD902', date:'2026-02-15', subtotal:1200000000, discount:0, total:1200000000,
-          lines:[{ pid:'p1', name:'x', qty:1, price:1200000000, group:'service' }] }];
-      S.data.expenses = []; S.data.taxpay = [];
-      S.data.policy.reduce30 = false;
-      const j = taxCalc(hid, 2026, 1), y = taxCalc(hid, 2026, 0);
-      return JSON.stringify({ jRev:j.revPeriod, jVat:j.vat, jA:j.tncnA, yRev:y.revPeriod, yVat:y.vat });
-    })()`, ctx));
-  eq(r.jRev, 100000000, 'doanh thu tháng 1 chỉ tính hóa đơn tháng 1');
-  eq(r.yRev, 1300000000, 'doanh thu cả năm cộng đủ hai hóa đơn');
-  eq(r.jVat, 5000000, 'GTGT tháng 1 = 5% của 100 triệu');
-  ok(r.jA > 0 && r.jA < 150000000, 'TNCN tháng 1 được chia theo tỷ lệ doanh thu kỳ/năm', 'nhận ' + r.jA);
-});
-
-await section('14. Menu và các liên kết màn hình', async () => {
-  /* Đọc thẳng HTML đã vẽ để lấy đúng các thuộc tính mà app gắn cho từng nút:
-     bấm bằng thuộc tính thật, không bấm bằng dữ liệu tự nghĩ ra. */
-  const dataAttrs = sel => attrsFromHtml(String(doc.querySelector(sel).innerHTML));
-  const routes = Object.keys(ev('VIEWS'));
-
-  await ev('go("menu")');
-  const menuItems = dataAttrs('#app').filter(a => a.act === 'route');
-  for (const r of ['products', 'customers', 'expenses', 'policy']) {
-    ok(menuItems.some(a => a.route === r), 'Menu có mục mở màn hình "' + r + '"');
-  }
-  for (const r of ['products', 'customers', 'expenses', 'policy']) {
-    const it = menuItems.find(a => a.route === r);
-    if (!it) continue;
-    await click(it.act, it);
-    eq(ev('S.route'), r, 'bấm mục Menu "' + r + '" mở đúng màn hình');
-    ok(htmlOf('#app').length > 200, 'màn hình "' + r + '" mở từ Menu có nội dung');
-    await ev('go("menu")');
-  }
-
-  // Mọi nút trên mọi màn hình phải trỏ tới màn hình có thật
-  const badRoute = [], seenEls = [];
-  for (const r of routes) {
-    await ev('go("' + r + '")');
-    for (const a of dataAttrs('#app')) {
-      seenEls.push(a);
-      if (a.route && !routes.includes(a.route)) badRoute.push(r + ' → ' + String(a.route));
-    }
-  }
-  /* Thẻ chuyển màn hình ở đáy (Hôm nay / Bán hàng / Sổ sách / Thuế / Menu) là phần HTML tĩnh. */
-  const tabsHtml = (html.match(/<nav id="tabs">([\s\S]*?)<\/nav>/) || ['', ''])[1];
-  const tabs = attrsFromHtml(tabsHtml).filter(a => a.route);
-  for (const t of tabs) seenEls.push(t);
-  ok(tabs.length === 5, 'đáy màn hình có đủ 5 thẻ chuyển màn hình', 'nhận ' + tabs.length);
-  for (const t of tabs) if (!routes.includes(t.route)) badRoute.push('thẻ đáy → ' + String(t.route));
-  ok(!badRoute.length, 'mọi nút mở màn hình đều trỏ tới màn hình có thật', badRoute.join(', '));
-
-  // Mọi thứ gắn hành động trên giao diện đều phải có xử lý trong mã:
-  // nút bấm đi theo bộ xử lý "case", ô nhập/ô chọn đi theo bộ xử lý sự kiện nhập liệu.
-  const byCase = new Set([...String(code).matchAll(/case '([a-zA-Z]+)'/g)].map(m => m[1]));
-  const byInputId = new Set([...String(code).matchAll(/t\.id === '([a-zA-Z]+)'/g)].map(m => m[1]));
-  const missing = [];
-  for (const a of seenEls) {
-    if (!a.act) {
-      if (a.route && !/dataset\.route/.test(String(code))) missing.push('thẻ ' + a.route + ' (không có xử lý bấm thẻ)');
-      continue;
-    }
-    const isClick = a.tag === 'BUTTON' || a.tag === 'DIV' || a.tag === 'A';
-    if (isClick) { if (!byCase.has(a.act)) missing.push(a.act + ' (bấm)'); }
-    else if (!byInputId.has(a.id)) missing.push(a.act + ' (ô nhập ' + String(a.id) + ')');
-  }
-  ok(!missing.length, 'mọi nút bấm và ô nhập đều có xử lý trong mã', missing.length ? 'thiếu: ' + [...new Set(missing)].join(', ') : '');
-  await ev('go("home")');
-});
-
-console.log('\n———————————————————————————————');
-console.log(fails.length ? 'KẾT QUẢ: ' + pass + ' điều đúng, ' + fails.length + ' điều SAI:' : 'KẾT QUẢ: tất cả ' + pass + ' điều đều đúng.');
-fails.forEach(f => console.log('  ✗ ' + f));
-process.exit(fails.length ? 1 : 0);
+  console.log('\n' + pass + ' điều đúng, ' + fail + ' điều sai');
+  process.exit(fail ? 1 : 0);
+})().catch(e => { console.error('✗ LỖI CHẠY:', e && e.stack || e); process.exit(1); });

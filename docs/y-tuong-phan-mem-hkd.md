@@ -1,8 +1,9 @@
-# Ý tưởng & đặc tả: Phần mềm quản lý hộ kinh doanh (1 tệp HTML)
+# Ý tưởng & đặc tả: Phần mềm quản lý hộ kinh doanh (trang tĩnh)
 
 Tài liệu này chốt ý tưởng, phạm vi, kiến trúc và cách làm đúng luật cho phần mềm
-quản lý **nhiều hộ kinh doanh (HKD)** dưới dạng **một tệp HTML duy nhất**, chạy
-được trên iPhone/iPad và máy tính, không cần mạng, không cần cài đặt.
+quản lý **nhiều hộ kinh doanh (HKD)** dưới dạng trang web tĩnh gồm `index.html`,
+`css/style.css` và `js/*.js`, chạy được trên iPhone/iPad và máy tính, không cần
+mạng, không cần cài đặt.
 
 Cập nhật: 2026 — bám theo chính sách thuế HKD áp dụng từ 01/01/2026.
 
@@ -26,14 +27,15 @@ Mục tiêu số 2: **dùng được thật** — mở là chạy, bán hàng 3 
 
 ## 2. Nguyên tắc thiết kế
 
-1. **Một tệp HTML duy nhất**, mở bằng trình duyệt có sẵn (Safari/Chrome). Không
-   cài đặt, không máy chủ, không tài khoản, không quảng cáo.
-2. **Chạy hoàn toàn offline.** Mọi mã và giao diện nằm trong tệp; không tải
-   thư viện từ Internet.
+1. **Trang tĩnh gồm HTML/CSS/JS thuần**, mở bằng trình duyệt có sẵn
+   (Safari/Chrome). Không cài đặt, không máy chủ, không build, không tài khoản,
+   không quảng cáo. Dùng classic `<script src>` để mở được cả bằng `file://`.
+2. **Chạy hoàn toàn offline.** Mọi mã và giao diện nằm trong thư mục dự án;
+   không tải thư viện từ Internet.
 3. **Dữ liệu thuộc về người dùng**: lưu trong máy (IndexedDB), không gửi đi đâu.
    Xuất/nhập một tệp sao lưu để đổi máy, cất giữ.
-4. **In được**: phiếu bán, sổ sách, bảng kê, báo cáo — khổ A4 và khổ in nhiệt
-   58/80mm.
+4. **In được**: phiếu bán, sổ sách, bảng kê, báo cáo qua hộp thoại in của
+   trình duyệt (khổ A4 hoặc Lưu thành PDF). Chưa hỗ trợ khổ nhiệt 58/80 mm.
 5. **Luật là dữ liệu, không phải mã**: ngưỡng miễn thuế, tỷ lệ thuế, bậc thuế,
    giảm thuế đều là **bảng cấu hình có ngày hiệu lực**, sửa được trong phần mềm
    khi luật đổi — không phải sửa code.
@@ -276,7 +278,8 @@ sai số làm tròn; mọi phép tính thuế làm tròn đến đồng theo quy
   Sổ sách – Thuế – Menu**; trên máy tính chuyển thành thanh bên.
 - Tiếng Việt toàn bộ, số tiền định dạng `1.234.567 đ`, ngày `dd/mm/yyyy`.
 - Chữ to, nút to, tương phản cao (dùng ngoài trời, người lớn tuổi).
-- In: CSS riêng cho A4 (sổ, báo cáo) và khổ 58/80mm (phiếu bán); ẩn menu khi in;
+- In: CSS riêng cho A4 (sổ, báo cáo); in qua hộp thoại của trình duyệt, ẩn menu
+  khi in;
   tiêu đề có tên hộ, MST, kỳ, người lập.
 - Không dùng biểu tượng mơ hồ: mỗi nút có chữ.
 

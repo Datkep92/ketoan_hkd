@@ -1,53 +1,61 @@
 # Trạng thái dự án
 
-Cập nhật: 12/11/2026. Phần mềm: `app/quan-ly-hkd.html` (một tệp, 69.977 ký tự),
-chạy bằng trình duyệt, không build, không máy chủ.
+Cập nhật: 25/11/2026. Phần mềm gồm `index.html`, `css/style.css` và ba tệp
+`js/*.js`; chạy trong trình duyệt, không build, không máy chủ. Giao diện có
+thanh bên khi dùng màn hình rộng, năm thẻ khi dùng điện thoại.
 
 ## Đã xong và đã kiểm
 
 | Việc | Kiểm bằng gì |
 |---|---|
-| Thiết lập lần đầu: ngưỡng, kỳ kê khai, hộ đầu tiên | `Scripts/smoke_app.mjs` — mục 1, 2 |
-| Hàng hóa: thêm/sửa, giá, tồn kho, đưa vào giỏ | mục 3 |
-| Bán hàng: thu tiền mặt, chuyển khoản, ghi nợ; giảm giá; in phiếu; tự trừ tồn kho | mục 4 |
-| Khách hàng: công nợ, thu nợ | mục 5 |
-| Chi phí: thêm/xóa | mục 6 |
-| Sổ sách: doanh thu kỳ, doanh thu theo nhóm thuế, in bảng kê, in lại hóa đơn | mục 7 |
-| Thuế: GTGT theo nhóm, TNCN hai cách A/B, giảm 30%, đổi kỳ, ghi nhận đã nộp | mục 7, 13 |
-| Số liệu thuế theo ví dụ văn bản luật (1,8 tỷ; 2,2 tỷ; 2,5 tỷ; sát ngưỡng; trên 3 tỷ; trên 10 tỷ) | mục 13 — 27 phép kiểm |
-| Cấu hình chính sách thuế: lưu không mất số, chọn nhanh ngưỡng, khôi phục mặc định | mục 8 |
-| Nhiều hộ kinh doanh: thêm, chuyển hộ, dữ liệu tách riêng | mục 9 |
-| Lưu trữ trong máy (IndexedDB, có đường lui localStorage) | mục 10 |
-| Sao lưu ra tệp JSON và nhập lại | mục 11 |
-| Mọi màn hình vẽ được | mục 12 |
-| Menu và mọi liên kết màn hình trỏ đúng (lỗi cũ: 4 mục Menu không mở được — đã sửa) | mục 14 |
+| Thiết lập lần đầu: ngưỡng, kỳ kê khai, hộ đầu tiên | `Scripts/smoke_app.mjs` |
+| Hàng hóa: thêm/sửa/xóa, giá, tồn kho, đưa vào giỏ | smoke |
+| Bán hàng: tiền mặt, chuyển khoản, ghi nợ; giảm giá; trừ tồn; in phiếu | smoke |
+| Khách hàng: công nợ, thu nợ | smoke |
+| Chi phí: thêm/xóa | smoke |
+| Sổ sách: doanh thu kỳ, theo nhóm thuế, in bảng kê, in lại hóa đơn, xuất CSV | smoke |
+| Thuế: GTGT theo nhóm, TNCN hai cách A/B, giảm 30%, đổi kỳ, ghi nhận đã nộp | smoke |
+| Số liệu thuế theo ví dụ luật (1,8 / 2,2 / 2,5 tỷ; sát ngưỡng; trên 3 tỷ; trên 10 tỷ) | smoke |
+| Cấu hình chính sách thuế: lưu không mất số, chọn nhanh ngưỡng, khôi phục mặc định | smoke |
+| Nhiều hộ kinh doanh: thêm, chuyển hộ, dữ liệu tách riêng | smoke |
+| Lưu trữ trong máy (IndexedDB, đường lui localStorage) | smoke + Safari |
+| Sao lưu ra tệp JSON và nhập lại | smoke |
+| Mọi màn hình vẽ được; mọi nút/ô có xử lý; Menu và liên kết trỏ đúng | smoke |
+| Phím tắt Alt+1…Alt+5, Esc | smoke |
+| Cấu trúc trang, thứ tự tải script, cú pháp | `python3 Scripts/check_app.py` |
 
-Kết quả lần chạy gần nhất: **124/124 điều đúng**, `python3 Scripts/check_app.py`
-cũng đạt. Cách chạy: xem `AGENTS.md`.
+Kết quả lần chạy gần nhất: **142 điều đúng, 0 điều sai**; kiểm cấu trúc cũng
+đạt. Cách chạy: xem `AGENTS.md`.
+
+**Kiểm trong Safari thật (25/11/2026):** máy chủ nội bộ ghi `200` cho trang và
+cả bốn tệp CSS/JS. Bản dò chèn vào trang báo 11 màn hình nạp được, năm thẻ và
+bảy mục Menu đầy đủ, trang chính vẽ ra chữ, IndexedDB hoạt động, bấm thử Menu
+và Bán hàng chuyển đúng màn hình, không lỗi JavaScript.
 
 ## Chưa kiểm trên máy thật
 
-- **Mở tệp bằng Safari trên chính máy này**: mới thử mở qua máy chủ nội bộ, Safari
-  không tải trang (nhật ký máy chủ không nhận yêu cầu nào), nên **chưa có bằng
-  chứng bằng mắt**. Cần một lần mở thật và bấm thử vài mục Menu, vài lần lưu dữ
-  liệu.
-- **Hộp thoại in và bản in**: phần mềm có gọi lệnh in (đã kiểm là được gọi), nhưng
-  chưa in thật ra máy in hoặc ra PDF trên máy này. Bố cục bản in A4 chưa được xem.
-- **Máy in khổ nhiệt 58/80 mm**: **chưa hỗ trợ**, trong tệp không có quy tắc in
-  khổ hẹp nào. Nếu cần, đây là việc phải làm thêm.
-- **Dữ liệu lớn** (hàng nghìn hóa đơn): chưa đo tốc độ trên máy thật.
+- **Bố cục bằng mắt:** `apelin_screen_read_tree` có lúc không đọc được Safari
+  (nhiều app cùng ở trước). Muốn xem bố cục thì xin Sếp cho chụp ảnh màn hình.
+- **Bố cục desktop (màn hình ≥900 px):** chỉ mới kiểm bằng quy tắc CSS, chưa xem
+  trên máy tính thật.
+- **Hộp thoại in và bản in:** phần mềm gọi lệnh in (đã kiểm là được gọi), nhưng
+  chưa in ra máy in hoặc lưu PDF thật; bố cục A4 chưa ai xem.
+- **Máy in khổ nhiệt 58/80 mm:** chưa hỗ trợ.
+- **Dữ liệu lớn** (hàng nghìn hóa đơn): chưa đo tốc độ.
 
 ## Còn lại (chưa làm)
 
+- Xem và thử bấm trên Safari bằng mắt, nhất là bố cục desktop.
+- In thử ra PDF/A4 để xem bản in.
 - In khổ nhiệt 58/80 mm nếu Sếp dùng máy in hóa đơn.
-- Xem trước và lưu bản in PDF trực tiếp trong app (hiện dùng hộp thoại in của
-  trình duyệt).
-- Kiểm tra thật trên Safari (mục trên) trước khi giao cho người dùng cuối.
+- Mở rộng Google Drive sau này (Sếp đã nêu ý định; chưa làm, app hiện chỉ lưu
+  trong máy và sao lưu bằng tệp JSON).
 
 ## Giới hạn cố định (không đổi theo yêu cầu)
 
 Không phát hành hóa đơn điện tử, không nộp tờ khai thay, không tự cập nhật luật;
-số thuế là ước tính từ hóa đơn đã ghi; dữ liệu chỉ nằm trong trình duyệt của máy.
+số thuế là ước tính từ hóa đơn đã ghi; dữ liệu nằm trong trình duyệt của máy
+đang dùng.
 
 ## Tệp trong dự án
 
