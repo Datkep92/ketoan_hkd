@@ -9,6 +9,9 @@ Không máy chủ, không cài đặt, không mạng, không tài khoản, **kh�
 Dữ liệu nằm trong trình duyệt của máy (IndexedDB, có đường lui localStorage),
 xuất/nhập qua tệp JSON sao lưu.
 
+Web công khai: `https://datkep92.github.io/ketoan_hkd/` — GitHub Pages bật từ
+nhánh `main` ngày 25/11/2026; khi đẩy commit mới, Pages tự cập nhật.
+
 Sếp đã yêu cầu tái cấu trúc từ bản một tệp sang như trên và **tối ưu cho máy tính**:
 bố cục có thanh bên khi màn hình rộng (xem `css/style.css`, mục `.shell`,
 `@media (max-width:900px)`). Giữ nguyên cách chạy: sửa tệp là xong, mở lại trang

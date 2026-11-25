@@ -4,7 +4,9 @@
 
 Phần mềm là **một thư mục gồm** `index.html`, `css/style.css` và ba tệp trong
 `js/`. Giữ nguyên cấu trúc đó, rồi mở `index.html` bằng trình duyệt. Không cần
-cài đặt, không cần mạng, không có tài khoản.
+cài đặt, không cần mạng, không có tài khoản. Nếu có mạng, có thể mở sẵn bản công
+khai tại `https://datkep92.github.io/ketoan_hkd/`; dù mở từ web hay từ tệp,
+dữ liệu vẫn chỉ nằm trong trình duyệt của chính máy bạn.
 
 - Trên máy tính: nháy đúp `index.html` để mở bằng Chrome/Edge/Safari.
 - Trên iPhone/iPad: lưu cả thư mục vào Ứng dụng **Tệp**, rồi mở `index.html`

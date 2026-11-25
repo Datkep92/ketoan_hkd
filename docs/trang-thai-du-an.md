@@ -32,6 +32,11 @@ cả bốn tệp CSS/JS. Bản dò chèn vào trang báo 11 màn hình nạp đ�
 bảy mục Menu đầy đủ, trang chính vẽ ra chữ, IndexedDB hoạt động, bấm thử Menu
 và Bán hàng chuyển đúng màn hình, không lỗi JavaScript.
 
+**Web công khai (25/11/2026):** đã bật GitHub Pages từ nhánh `main` tại
+`https://datkep92.github.io/ketoan_hkd/`. Trang và cả bốn tệp CSS/JS đều trả về
+`HTTP 200`; nội dung trang đúng bản đã kiểm ở trên. Chưa bấm thử trên bản công
+khai bằng Safari — phần giao diện đã thử qua máy chủ nội bộ cùng một mã nguồn.
+
 ## Chưa kiểm trên máy thật
 
 - **Bố cục bằng mắt:** `apelin_screen_read_tree` có lúc không đọc được Safari
