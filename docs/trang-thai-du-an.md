@@ -27,9 +27,10 @@ thanh bên khi dùng màn hình rộng, năm thẻ khi dùng điện thoại.
 | Sao lưu ra tệp JSON và nhập lại | smoke |
 | Mọi màn hình vẽ được; mọi nút/ô có xử lý; Menu và liên kết trỏ đúng | smoke |
 | Phím tắt Alt+1…Alt+8, Esc | smoke |
+| Dữ liệu mẫu: nút ở cài đặt/Menu, xác nhận, từ chối không ghi đè, hai hộ đầy đủ, mọi màn vẽ được | smoke |
 | Cấu trúc trang, thứ tự tải script, cú pháp | `python3 Scripts/check_app.py` |
 
-Kết quả lần chạy gần nhất: **194 điều đúng, 0 điều sai**; kiểm cấu trúc cũng
+Kết quả lần chạy gần nhất: **229 điều đúng, 0 điều sai**; kiểm cấu trúc cũng
 đạt. Cách chạy: xem `AGENTS.md`.
 
 **Kiểm trong Safari thật (25/11/2026, bản sau khi mở rộng):** máy chủ nội bộ

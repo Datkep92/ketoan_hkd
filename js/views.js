@@ -44,6 +44,9 @@ VIEWS.setup = function(){
     + '<label class="f" style="margin-top:6px"><span>Tự nhập (đồng)</span>'
     + '<input type="number" inputmode="numeric" id="setThreshold" value="' + (pol.threshold || '') + '" placeholder="ví dụ 1000000000"></label>'
     + '</div></div>'
+    + '<div class="card"><h3>Thử ngay với dữ liệu mẫu</h3>'
+    + '<p class="muted small">Nạp hai hộ kinh doanh cùng hàng hóa, phiếu bán, phiếu nhập, công nợ và chi phí để xem app hoạt động. Dữ liệu hiện có sẽ bị thay thế sau khi xác nhận.</p>'
+    + '<button class="btn" data-act="loadDemo">Nạp dữ liệu mẫu đầy đủ</button></div>'
     + '<div class="card"><h3>3. Hộ kinh doanh đầu tiên</h3>'
     + '<div class="grid3">'
     + '<label class="f"><span>Tên hộ kinh doanh</span><input type="text" id="setName" placeholder="Hộ kinh doanh ..."></label>'
@@ -524,6 +527,7 @@ VIEWS.menu = function(){
     + nav('data', 'Cổng dữ liệu hóa đơn', 'Nhập/xuất JSON, XML')
     + item('backup', 'Sao lưu ra tệp JSON', 'Lưu định kỳ ở nơi an toàn')
     + item('restore', 'Nhập từ tệp JSON', 'Ghi đè dữ liệu hiện có sau khi xác nhận')
+    + item('loadDemo', 'Nạp dữ liệu mẫu đầy đủ', 'Xem ngay app với dữ liệu có sẵn (thay sau xác nhận)')
     + item('switchHH', 'Đổi hộ kinh doanh', 'Thêm hộ mới, chuyển hộ, xóa hộ')
     + nav('help', 'Hướng dẫn', 'Cách dùng và giới hạn của app')
     + '</div></div>'
@@ -543,7 +547,8 @@ VIEWS.help = function(){
     + '3. Vào Bán hàng: chọn hàng, nhập khách, chọn hình thức thu, nhấn Lưu phiếu.<br>'
     + '4. Vào Mua hàng để ghi phiếu nhập, Nhà cung cấp để trả nợ, Tồn kho để kiểm kê.<br>'
     + '5. Vào Sổ sách để xem, in, xuất Excel sáu sổ; vào Thuế để xem số ước tính.<br>'
-    + '6. Vào Cổng dữ liệu nếu cần nhận hóa đơn JSON/XML từ phần mềm khác.</p>'
+    + '6. Vào Cổng dữ liệu nếu cần nhận hóa đơn JSON/XML từ phần mềm khác.<br>'
+    + '7. Muốn thử ngay: Menu ▸ Nạp dữ liệu mẫu đầy đủ (sẽ thay dữ liệu hiện có sau khi xác nhận).</p>'
     + '<h3>Giới hạn cần nhớ</h3>'
     + '<p class="muted">App <b>không</b> phát hành hóa đơn điện tử, <b>không</b> nộp tờ khai thay, <b>không</b> tự cập nhật luật. Số thuế chỉ là ước tính từ các phiếu đã ghi, cần đối chiếu với quy định hiện hành.</p>'
     + '<p class="muted">In ấn dùng hộp thoại in của trình duyệt (AirPrint hoặc Lưu thành PDF). Chưa hỗ trợ máy in hóa đơn khổ nhiệt 58/80 mm.</p>'

@@ -518,6 +518,39 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   dispatch('keydown', { key:'8', altKey:true });
   ck('Alt+8 mở Cổng dữ liệu', g('S.route') === 'data');
 
+  console.log('== Dữ liệu mẫu ==');
+  g("go('setup')");
+  ck('màn cài đặt có nút nạp mẫu', el('app').innerHTML.includes('data-act="loadDemo"'));
+  g("go('menu')");
+  ck('Menu có nút nạp mẫu', el('app').innerHTML.includes('data-act="loadDemo"'));
+  const beforeDemo = g('S.data.households.length');
+  confirmAnswer = false; click('loadDemo');
+  ck('từ chối thì giữ nguyên dữ liệu', g('S.data.households.length') === beforeDemo);
+  confirmAnswer = true; click('loadDemo');
+  ck('nạp mẫu xong về màn hôm nay', g('S.route') === 'home');
+  ck('có hai hộ mẫu', g('S.data.households.length') === 2);
+  ck('có đủ hàng hóa mẫu', g('S.data.products.length') === 13);
+  ck('có đủ phiếu bán mẫu', g('S.data.invoices.length') === 28);
+  ck('có đủ phiếu nhập mẫu', g('S.data.purchases.length') === 5);
+  ck('có đủ khách mẫu', g('S.data.customers.length') === 6);
+  ck('có đủ nhà cung cấp mẫu', g('S.data.suppliers.length') === 4);
+  ck('có đủ chi phí mẫu', g('S.data.expenses.length') === 8);
+  ck('có thu nợ và trả nợ mẫu', g('S.data.payments.length') === 2 && g('S.data.supplierPayments.length') === 2);
+  ck('có kiểm kê và số đã nộp mẫu', g('S.data.stockAdj.length') === 1 && g('S.data.taxpay.length') === 1);
+  ck('ngưỡng mẫu được áp dụng', g('P().threshold') === 50000000);
+  ck('doanh thu mẫu đủ lớn để tính thuế', g('S.data.invoices.reduce((a,i) => a + i.total, 0)') > 50000000);
+  ck('tính thuế chạy được với dữ liệu mẫu', g('taxCalc(S.hid, new Date().getFullYear(), 0).revYear') > 0);
+  ck('có cảnh báo trên trang chủ', g('alerts().length') >= 1);
+  ck('không tồn kho âm', g('S.data.products.every(p => p.stock >= 0)'));
+  ck('giỏ hàng được dọn', g('S.cart.length') === 0 && g('S.purCart.length') === 0);
+  g("S.hid = 'demo-h2'; render()");
+  ck('chuyển sang hộ mẫu thứ hai', g('hh().name') === 'Quán cà phê Sáng sớm');
+  g("S.hid = 'demo-h1'; render()");
+  for (const r of Object.keys(routes)){
+    g('go(' + JSON.stringify(r) + ')');
+    ck('màn ' + r + ' vẽ được với dữ liệu mẫu', el('app').innerHTML.length > 100);
+  }
+
   console.log('\n' + pass + ' điều đúng, ' + fail + ' điều sai');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('✗ LỖI CHẠY:', e && e.stack || e); process.exit(1); });

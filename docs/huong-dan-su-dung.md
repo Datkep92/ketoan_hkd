@@ -31,6 +31,12 @@ Phần mềm hỏi ba thứ, mỗi thứ một lần:
 
 Bấm **Bắt đầu sử dụng**. Cần thêm hộ nữa thì làm ở mục 10.
 
+**Muốn xem thử ngay:** ở màn cài đặt bấm **Nạp dữ liệu mẫu đầy đủ** (hoặc vào
+Menu → cùng tên). Sau khi bạn xác nhận, phần mềm nạp hai hộ kinh doanh với đủ
+hàng hóa, phiếu bán, phiếu nhập, khách nợ, chi phí và số liệu thuế để thao tác
+thử. Việc này **thay toàn bộ dữ liệu hiện có**; nếu đã có dữ liệu thật, hãy sao
+lưu trước (mục 11). Dữ liệu mẫu chỉ để làm quen, không phải số liệu của hộ bạn.
+
 ## 3. Màn hình "Hôm nay"
 
 Hiện doanh thu hôm nay, doanh thu tháng, doanh thu cả năm; thanh tiến độ so với

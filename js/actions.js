@@ -764,6 +764,14 @@ document.addEventListener('click', (e) => {
       break;
     }
 
+    /* dữ liệu mẫu */
+    case 'loadDemo': {
+      if (hhs().length && !confirm('Thay thế toàn bộ dữ liệu hiện tại bằng dữ liệu mẫu? Dữ liệu thật sẽ mất, hãy sao lưu trước nếu cần.')) break;
+      installDemoData(); closeSheet(); go('home');
+      toast('Đã nạp dữ liệu mẫu — vào Menu để đổi hộ');
+      break;
+    }
+
     /* sao lưu và nhập lại */
     case 'backup': {
       const text = JSON.stringify({ app:'quan-ly-hkd', version:1, exportedAt:new Date().toISOString(), data:S.data }, null, 1);

@@ -603,3 +603,211 @@ function docFoot(){
   return '<div class="sign"><div>Người mua / khách hàng<br><br><br>(Ký, ghi rõ họ tên)</div>'
     + '<div>Người bán hàng<br><br><br>' + esc(h ? (h.owner || '') : '') + '</div></div></div>';
 }
+
+/* ---------------------------- dữ liệu mẫu ---------------------------- */
+/* Chỉ nạp khi người dùng bấm nút: không tự ghi đè dữ liệu thật. */
+function demoDay(ago){
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() - Number(ago || 0));
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-'
+    + String(d.getDate()).padStart(2, '0');
+}
+function makeDemoData(){
+  const day = demoDay;
+  const pol = JSON.parse(JSON.stringify(DEFAULT_POLICY));
+  pol.threshold = 50000000;
+  pol.period = 'month';
+  const data = {
+    households: [
+      { id:'demo-h1', name:'Cửa hàng Tạp hóa Lan Anh', taxCode:'0123456789', owner:'Lan Anh',
+        address:'12 Nguyễn Văn Hưởng, Quận 2', group:'goods', color:PALETTE[0], startDate:day(120) },
+      { id:'demo-h2', name:'Quán cà phê Sáng sớm', taxCode:'', owner:'Minh Sáng',
+        address:'7 Lê Đại Hành, Quận 11', group:'service', color:PALETTE[1], startDate:day(60) }
+    ],
+    products:[], invoices:[], customers:[], expenses:[], payments:[], taxpay:[],
+    suppliers:[], purchases:[], supplierPayments:[], stockAdj:[],
+    policy:pol, settings:{ onboarded:true, backupAt:null, cashStart:30000000 }
+  };
+  const byName = (hid, name) => data.products.find(p => p.hid === hid
+    && p.name.toLowerCase() === String(name).toLowerCase());
+  const addProd = (hid, id, name, unit, price, cost, minStock, group) => {
+    data.products.push({ id:id, hid:hid, name:name, unit:unit, group:group || 'goods',
+      price:price, cost:cost, stock:0, minStock:minStock });
+  };
+  const addSup = (hid, id, name, phone) => {
+    data.suppliers.push({ id:id, hid:hid, name:name, phone:phone, address:'', debt:0 });
+  };
+  const addCust = (hid, id, name, phone) => {
+    data.customers.push({ id:id, hid:hid, name:name, phone:phone, debt:0 });
+  };
+  const addPur = (hid, id, ago, supId, pay, rows) => {
+    const sup = data.suppliers.find(s => s.id === supId);
+    const lines = rows.map(r => {
+      const prod = byName(hid, r[0]);
+      return { pid:prod ? prod.id : '', name:r[0], qty:r[1], price:r[2],
+        group:prod ? prod.group : 'goods' };
+    });
+    lines.forEach(l => {
+      const prod = data.products.find(x => x.id === l.pid);
+      if (!prod) return;
+      const qty = n0(l.qty), oldStock = n0(prod.stock), oldCost = n0(prod.cost);
+      prod.stock = oldStock + qty;
+      if (qty > 0) prod.cost = Math.round((oldStock * oldCost + qty * n0(l.price)) / (oldStock + qty));
+    });
+    const sub = sum(lines.map(l => l.qty * l.price));
+    data.purchases.push({ id:id, hid:hid,
+      code:'PN' + String(data.purchases.filter(x => x.hid === hid).length + 1).padStart(3, '0'),
+      date:day(ago), supplierId:supId, supplier:sup ? sup.name : '', lines:lines,
+      subtotal:sub, discount:0, total:sub, pay:pay, note:'Dữ liệu mẫu' });
+    if (pay === 'debt' && sup) sup.debt = n0(sup.debt) + sub;
+  };
+  const addSale = (hid, id, ago, custId, pay, rows) => {
+    const cust = data.customers.find(c => c.id === custId);
+    const lines = rows.map(r => {
+      const prod = byName(hid, r[0]);
+      return { pid:prod ? prod.id : '', name:r[0], qty:r[1], price:r[2],
+        group:prod ? prod.group : 'goods' };
+    });
+    lines.forEach(l => {
+      const prod = data.products.find(x => x.id === l.pid);
+      if (prod && prod.stock != null) prod.stock = n0(prod.stock) - n0(l.qty);
+    });
+    const sub = sum(lines.map(l => l.qty * l.price));
+    data.invoices.push({ id:id, hid:hid,
+      code:'HD' + String(data.invoices.filter(x => x.hid === hid).length + 1).padStart(3, '0'),
+      date:day(ago), lines:lines, subtotal:sub, discount:0, total:sub, pay:pay,
+      customer:cust ? cust.name : '', customerId:cust ? cust.id : '', note:'Dữ liệu mẫu' });
+    if (pay === 'debt' && cust) cust.debt = n0(cust.debt) + sub;
+  };
+  const payCust = (hid, id, ago, custId, amount) => {
+    const c = data.customers.find(x => x.id === custId);
+    if (!c) return;
+    c.debt = Math.max(0, n0(c.debt) - amount);
+    data.payments.push({ id:id, hid:hid, customerId:c.id, customer:c.name,
+      amount:amount, date:day(ago), note:'Dữ liệu mẫu' });
+  };
+  const paySup = (hid, id, ago, supId, amount) => {
+    const s = data.suppliers.find(x => x.id === supId);
+    if (!s) return;
+    s.debt = Math.max(0, n0(s.debt) - amount);
+    data.supplierPayments.push({ id:id, hid:hid, supplierId:s.id, supplier:s.name,
+      amount:amount, date:day(ago), note:'Dữ liệu mẫu' });
+  };
+  const addExp = (hid, id, ago, name, amount) => {
+    data.expenses.push({ id:id, hid:hid, name:name, amount:amount,
+      date:day(ago), note:'Dữ liệu mẫu' });
+  };
+
+  /* hộ 1 — cửa hàng tạp hóa */
+  const h1 = 'demo-h1';
+  addProd(h1, 'demo-p1',  'Gạo ST25',              'kg',   28000, 22000, 250, 'goods');
+  addProd(h1, 'demo-p2',  'Nước mắm Nam Ngư 500ml','chai', 48000, 38000,  80, 'goods');
+  addProd(h1, 'demo-p3',  'Dầu ăn Simply 1L',      'chai', 65000, 52000,  70, 'goods');
+  addProd(h1, 'demo-p4',  'Trứng gà ta',           'quả',   4500,  3300, 150, 'goods');
+  addProd(h1, 'demo-p5',  'Mì Hảo Ốc',             'gói',  12000,  9000, 150, 'goods');
+  addProd(h1, 'demo-p6',  'Bột giặt Omo 1kg',      'gói',  58000, 46000,  12, 'goods');
+  addProd(h1, 'demo-p7',  'Nước ngọt Coca 330ml',  'lon',  15000, 11000, 100, 'goods');
+  addProd(h1, 'demo-p8',  'Bánh mì',               'ổ',     8000,  5500, 100, 'goods');
+  addProd(h1, 'demo-p9',  'Cà phê hạt Robusta',    'kg',  145000,120000,  10, 'goods');
+  addProd(h1, 'demo-p10', 'Đường cát',             'kg',   22000, 17500,  20, 'goods');
+  addSup(h1, 'demo-s1', 'Công ty Tân Phú', '0938111222');
+  addSup(h1, 'demo-s2', 'Chợ đầu mối Bình Điền', '0947333444');
+  addSup(h1, 'demo-s3', 'Công ty Nam Hải', '0917555666');
+  addCust(h1, 'demo-c1', 'Anh Minh', '0912345678');
+  addCust(h1, 'demo-c2', 'Quán Bún Chả Hà Nội', '0987654321');
+  addCust(h1, 'demo-c3', 'Chị Lan', '0909123456');
+  addCust(h1, 'demo-c4', 'Cô Tư', '0326555888');
+  addCust(h1, 'demo-c5', 'Siêu thị Đông Nam', '02838112233');
+
+  addPur(h1, 'demo-pur1', 55, 'demo-s1', 'cash', [
+    ['Gạo ST25', 500, 22000], ['Nước mắm Nam Ngư 500ml', 150, 38000], ['Dầu ăn Simply 1L', 120, 52000]
+  ]);
+  addPur(h1, 'demo-pur2', 38, 'demo-s2', 'cash', [
+    ['Trứng gà ta', 1300, 3300], ['Mì Hảo Ốc', 400, 9000], ['Bánh mì', 400, 5500], ['Đường cát', 60, 17500]
+  ]);
+  addPur(h1, 'demo-pur3', 18, 'demo-s3', 'debt', [
+    ['Cà phê hạt Robusta', 30, 120000], ['Nước ngọt Coca 330ml', 300, 11000],
+    ['Bột giặt Omo 1kg', 60, 46000], ['Nước mắm Nam Ngư 500ml', 60, 38000]
+  ]);
+  addPur(h1, 'demo-pur4', 5, 'demo-s1', 'debt', [
+    ['Gạo ST25', 400, 22000], ['Dầu ăn Simply 1L', 100, 52000],
+    ['Trứng gà ta', 1000, 3300], ['Mì Hảo Ốc', 600, 9000]
+  ]);
+
+  const big = [['Gạo ST25', 80, 28000], ['Dầu ăn Simply 1L', 20, 65000],
+    ['Nước mắm Nam Ngư 500ml', 20, 48000], ['Trứng gà ta', 200, 4500], ['Mì Hảo Ốc', 80, 12000]];
+  const bigB = [['Gạo ST25', 80, 28000], ['Mì Hảo Ốc', 80, 12000],
+    ['Trứng gà ta', 200, 4500], ['Dầu ăn Simply 1L', 20, 65000]];
+  addSale(h1, 'demo-inv1',  0, '',         'cash', [['Gạo ST25',12,28000],['Nước mắm Nam Ngư 500ml',6,48000],['Dầu ăn Simply 1L',5,65000],['Trứng gà ta',60,4500]]);
+  addSale(h1, 'demo-inv2',  1, 'demo-c2',  'debt', big);
+  addSale(h1, 'demo-inv3',  2, '',         'cash', [['Bánh mì',30,8000],['Nước ngọt Coca 330ml',24,15000],['Trứng gà ta',40,4500],['Cà phê hạt Robusta',1,145000]]);
+  addSale(h1, 'demo-inv4',  3, 'demo-c1',  'debt', big);
+  addSale(h1, 'demo-inv5',  4, '',         'cash', [['Gạo ST25',15,28000],['Đường cát',4,22000],['Bột giặt Omo 1kg',3,58000],['Nước mắm Nam Ngư 500ml',5,48000]]);
+  addSale(h1, 'demo-inv6',  5, '',         'cash', [['Mì Hảo Ốc',25,12000],['Nước ngọt Coca 330ml',36,15000],['Bánh mì',20,8000]]);
+  addSale(h1, 'demo-inv7',  6, 'demo-c3',  'debt', [['Gạo ST25',10,28000],['Dầu ăn Simply 1L',4,65000],['Trứng gà ta',30,4500],['Bánh mì',10,8000]]);
+  addSale(h1, 'demo-inv8',  7, '',         'cash', [['Cà phê hạt Robusta',2,145000],['Đường cát',3,22000],['Bột giặt Omo 1kg',2,58000]]);
+  addSale(h1, 'demo-inv9',  8, '',         'cash', [['Gạo ST25',12,28000],['Nước mắm Nam Ngư 500ml',6,48000],['Trứng gà ta',50,4500]]);
+  addSale(h1, 'demo-inv10', 9, 'demo-c1',  'debt', big);
+  addSale(h1, 'demo-inv11',11, '',         'cash', [['Bánh mì',40,8000],['Nước ngọt Coca 330ml',30,15000],['Mì Hảo Ốc',20,12000]]);
+  addSale(h1, 'demo-inv12',12, '',         'cash', bigB);
+  addSale(h1, 'demo-inv13',13, '',         'cash', [['Gạo ST25',14,28000],['Dầu ăn Simply 1L',5,65000],['Bột giặt Omo 1kg',4,58000]]);
+  addSale(h1, 'demo-inv14',16, 'demo-c4',  'debt', [['Gạo ST25',10,28000],['Trứng gà ta',40,4500],['Đường cát',5,22000]]);
+  addSale(h1, 'demo-inv15',19, '',         'cash', [['Mì Hảo Ốc',30,12000],['Nước ngọt Coca 330ml',24,15000],['Bánh mì',20,8000]]);
+  addSale(h1, 'demo-inv16',22, 'demo-c5',  'debt', bigB);
+  addSale(h1, 'demo-inv17',23, '',         'cash', big);
+  addSale(h1, 'demo-inv18',27, '',         'cash', [['Gạo ST25',12,28000],['Nước mắm Nam Ngư 500ml',5,48000],['Trứng gà ta',40,4500]]);
+  addSale(h1, 'demo-inv19',33, '',         'cash', [['Bánh mì',25,8000],['Mì Hảo Ốc',20,12000],['Nước ngọt Coca 330ml',20,15000]]);
+  addSale(h1, 'demo-inv20',35, '',         'cash', bigB);
+  addSale(h1, 'demo-inv21',40, 'demo-c2',  'debt', [['Gạo ST25',60,28000],['Dầu ăn Simply 1L',15,65000],['Mì Hảo Ốc',60,12000],['Trứng gà ta',150,4500]]);
+  addSale(h1, 'demo-inv22',48, '',         'cash', [['Gạo ST25',15,28000],['Đường cát',5,22000],['Cà phê hạt Robusta',1,145000]]);
+  addSale(h1, 'demo-inv23',56, '',         'cash', bigB);
+
+  payCust(h1, 'demo-pay1', 10, 'demo-c1', 5000000);
+  payCust(h1, 'demo-pay2', 2,  'demo-c3', 700000);
+  paySup(h1,  'demo-spay1', 3, 'demo-s3', 5000000);
+  addExp(h1, 'demo-exp1', 1,  'Tiền điện',        1800000);
+  addExp(h1, 'demo-exp2', 6,  'Lương nhân viên',  4000000);
+  addExp(h1, 'demo-exp3', 12, 'Tiền nước',         350000);
+  addExp(h1, 'demo-exp4', 20, 'Internet',          300000);
+  addExp(h1, 'demo-exp5', 30, 'Thuê mặt bằng',    6000000);
+  addExp(h1, 'demo-exp6', 45, 'Sửa tủ lạnh',      1200000);
+  const gao = data.products.find(x => x.id === 'demo-p1');
+  const gaoDelta = 18 - n0(gao ? gao.stock : 0);
+  if (gao) gao.stock = 18;
+  data.stockAdj.push({ id:'demo-adj1', hid:h1, productId:'demo-p1', product:gao ? gao.name : '',
+    delta:gaoDelta, reason:'Kiểm kê cuối tháng', date:day(7) });
+  data.taxpay.push({ id:'demo-tax1', hid:h1, year:new Date().getFullYear(), month:0,
+    amount:1500000, date:day(9), note:'Đã nộp kỳ trước (mẫu)' });
+
+  /* hộ 2 — quán cà phê */
+  const h2 = 'demo-h2';
+  addProd(h2, 'demo-p101', 'Cà phê sữa đá', 'ly',  30000, 12000, 20, 'service');
+  addProd(h2, 'demo-p102', 'Bánh mì nướng', 'cái', 25000, 12000, 15, 'goods');
+  addProd(h2, 'demo-p103', 'Trà đá',        'ly',  10000,  3000, 30, 'service');
+  addSup(h2, 'demo-s101', 'Chợ Nghĩa Tân', '0938222333');
+  addCust(h2, 'demo-c101', 'Chị Hạnh', '0966123456');
+  addPur(h2, 'demo-pur101', 15, 'demo-s101', 'debt', [
+    ['Cà phê sữa đá', 100, 12000], ['Bánh mì nướng', 80, 12000], ['Trà đá', 150, 3000]
+  ]);
+  addSale(h2, 'demo-inv101', 0, '',          'cash', [['Cà phê sữa đá',20,30000],['Bánh mì nướng',10,25000]]);
+  addSale(h2, 'demo-inv102', 1, 'demo-c101', 'debt', [['Cà phê sữa đá',30,30000],['Trà đá',20,10000]]);
+  addSale(h2, 'demo-inv103', 2, '',          'cash', [['Bánh mì nướng',20,25000],['Cà phê sữa đá',10,30000],['Trà đá',10,10000]]);
+  addSale(h2, 'demo-inv104', 4, '',          'cash', [['Cà phê sữa đá',25,30000],['Bánh mì nướng',12,25000]]);
+  addSale(h2, 'demo-inv105', 7, '',          'cash', [['Trà đá',30,10000],['Cà phê sữa đá',12,30000]]);
+  paySup(h2, 'demo-spay101', 3, 'demo-s101', 410000);
+  addExp(h2, 'demo-exp101', 5, 'Tiền điện quán',  850000);
+  addExp(h2, 'demo-exp102', 8, 'Lương nhân viên', 3000000);
+  return data;
+}
+function installDemoData(){
+  S.data = makeDemoData();
+  S.hid = S.data.households[0].id;
+  S.cart = [];
+  S.purCart = [];
+  S._purForm = {};
+  S.bookMonth = todayISO().slice(0, 7);
+  S.taxYear = new Date().getFullYear();
+  S.taxMonth = 0;
+  saveAll();
+}
