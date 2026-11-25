@@ -137,12 +137,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   ck('mở cửa sổ thêm hàng', el('sheetBox').innerHTML.includes('id="gName"'));
   setVal('gName', 'Gạo'); setVal('gUnit', 'kg'); setVal('gGroup', 'goods');
   setVal('gPrice', '25000'); setVal('gCost', '18000'); setVal('gStock', '100');
-  click('saveProduct');
+  setVal('gMinStock', '5'); click('saveProduct');
   ck('lưu mặt hàng thứ nhất', g('S.data.products.length') === 1);
   ck('tên hàng đúng', g('S.data.products[0].name') === 'Gạo');
   ck('giá bán đúng', g('S.data.products[0].price') === 25000);
   ck('nhóm thuế đúng', g('S.data.products[0].group') === 'goods');
   ck('tồn kho đúng', g('S.data.products[0].stock') === 100);
+  ck('mức tối thiểu đúng', g('S.data.products[0].minStock') === 5);
   click('addProduct');
   setVal('gName', 'Cà phê'); setVal('gUnit', 'ly'); setVal('gGroup', 'service');
   setVal('gPrice', '30000'); setVal('gCost', '10000'); setVal('gStock', '50');
@@ -240,6 +241,62 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   confirmAnswer = true; click('delExpense', eid);
   ck('xóa chi phí', g('S.data.expenses.length') === 0);
 
+  console.log('== Mua hàng, nhà cung cấp và tồn kho ==');
+  g("go('purchases')");
+  ck('màn mua có nút tạo phiếu', el('app').innerHTML.includes('data-act="addPurchase"'));
+  click('addPurchase');
+  ck('mở cửa sổ phiếu nhập', el('sheetBox').innerHTML.includes('id="plName0"'));
+  setVal('purSupplier', 'Công ty ABC'); setVal('purDate', g('todayISO()')); setVal('purPay', 'debt');
+  setVal('plName0', 'Gạo'); setVal('plQty0', '10'); setVal('plPrice0', '15000');
+  setVal('plName1', 'Bột mì'); setVal('plQty1', '5'); setVal('plPrice1', '20000');
+  click('savePurchase');
+  ck('lưu phiếu nhập', g('S.data.purchases.length') === 1);
+  ck('mã phiếu nhập tự tăng', g('S.data.purchases[0].code') === 'PN001');
+  ck('tổng phiếu nhập', g('S.data.purchases[0].total') === 250000);
+  ck('cộng tồn hàng cũ', g('S.data.products[0].stock') === 109);
+  ck('giá vốn bình quân', g('S.data.products[0].cost') === 17725);
+  ck('tạo hàng mới khi nhập', g('S.data.products.length') === 3 && g('S.data.products[2].name') === 'Bột mì');
+  ck('tạo nhà cung cấp', g('S.data.suppliers.length') === 1 && g('S.data.suppliers[0].name') === 'Công ty ABC');
+  ck('ghi nợ nhà cung cấp', g('S.data.suppliers[0].debt') === 250000);
+  const pur1 = g('S.data.purchases[0].id'), sup1 = g('S.data.suppliers[0].id');
+  await sleep(80); click('printPurchase', pur1); await sleep(80);
+  ck('in phiếu nhập', printed[printed.length - 1].includes('PHIẾU NHẬP HÀNG'));
+  g("go('suppliers')");
+  ck('danh sách nhà cung cấp', el('app').innerHTML.includes('Công ty ABC'));
+  click('paySupplier', sup1);
+  ck('mở cửa sổ trả nợ', el('sheetBox').innerHTML.includes('id="spAmount"'));
+  setVal('spId', sup1); setVal('spAmount', '100000'); setVal('spDate', '2026-03-06'); click('doPaySupplier');
+  ck('ghi nhận trả nợ nhà cung cấp', g('S.data.supplierPayments.length') === 1);
+  ck('giảm công nợ nhà cung cấp', g('S.data.suppliers[0].debt') === 150000);
+  g("go('stock')");
+  ck('màn tồn có giá trị ước tính', el('app').innerHTML.includes('Giá trị tồn ước tính'));
+  click('stockAdjust', pid1);
+  setVal('adjId', pid1); setVal('adjStock', '3'); setVal('adjReason', 'kiểm kê tháng 3'); click('saveStockAdj');
+  ck('kiểm kê đổi tồn', g('S.data.products[0].stock') === 3);
+  ck('ghi lịch sử kiểm kê', g('S.data.stockAdj.length') === 1 && g('S.data.stockAdj[0].delta') === -106);
+  ck('cảnh báo tồn dưới mức tối thiểu', g('lowStocks().length') === 1);
+  g("go('home')");
+  ck('trang chủ hiện cảnh báo tồn', el('app').innerHTML.includes('mặt hàng tồn dưới mức tối thiểu'));
+  g("go('stock')"); click('delStockAdj', g('S.data.stockAdj[0].id'));
+  ck('bỏ kiểm kê thì hoàn tồn', g('S.data.products[0].stock') === 109);
+  click('addPurchase'); setVal('purSupplier', 'Công ty ABC'); setVal('purPay', 'cash');
+  setVal('plName0', 'Bột mì'); setVal('plQty0', '3'); setVal('plPrice0', '20000');
+  setVal('plName1', ''); setVal('plQty1', '0'); setVal('plPrice1', '');
+  click('savePurchase');
+  ck('lưu phiếu nhập tiền mặt', g('S.data.purchases.length') === 2 && g('S.data.purchases[1].pay') === 'cash');
+  ck('phiếu mới cộng tồn', g('S.data.products[2].stock') === 8);
+  const pur2 = g('S.data.purchases[1].id');
+  click('delPurchase', pur2);
+  ck('xóa phiếu nhập', g('S.data.purchases.length') === 1);
+  ck('xóa phiếu hoàn tồn', g('S.data.products[2].stock') === 5);
+  g("go('home')"); setVal('cashStart', '500000'); click('saveCashStart');
+  ck('lưu số dư đầu kỳ', g('S.data.settings.cashStart') === 500000);
+  ck('quỹ tiền mặt ước tính', g('cashOnHand()') === 420000);
+  confirmAnswer = true; click('returnPurchase', pur1);
+  ck('đánh dấu trả hàng', g('S.data.purchases[0].returned') === true);
+  ck('trả hàng hoàn tồn', g('S.data.products[0].stock') === 99);
+  ck('trả hàng hoàn công nợ', g('S.data.suppliers[0].debt') === 0);
+
   console.log('== Sổ sách và in ấn ==');
   g("go('book')");
   const month = new Date().toISOString().slice(0, 7);
@@ -255,6 +312,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   click('printBook');
   await sleep(80);
   ck('in bảng kê doanh thu', printed[printed.length - 1].includes('BẢNG KÊ DOANH THU'));
+  click('bookInfo', 's1c');
+  ck('xem trước sổ mua hàng', el('sheetBox').innerHTML.includes('Sổ mua hàng và chi phí'));
+  ck('sổ mua hàng có phiếu nhập', el('sheetBox').innerHTML.includes('PN001'));
+  click('bookPrint', 's1c');
+  await sleep(80);
+  ck('in sổ mua hàng', printed[printed.length - 1].includes('SỔ MUA HÀNG VÀ CHI PHÍ'));
+  click('bookExport', 's1c');
+  await sleep(20);
+  ck('xuất sổ ra tệp Excel', lastAnchor.download === 'so-s1c-' + month + '.xml');
+  click('closeSheet');
   click('printInvoice', g('S.data.invoices[0].id'));
   await sleep(80);
   ck('in lại phiếu bán cũ', printed[printed.length - 1].includes('PHIẾU BÁN HÀNG'));
@@ -345,10 +412,38 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   ck('nhập lại dữ liệu', g('S.data.households.length') === 2);
   ck('dữ liệu sau nhập đúng', g('hh().name') === 'Hộ kinh doanh A');
 
+  console.log('== Cổng dữ liệu hóa đơn ==');
+  g("go('data')");
+  ck('màn cổng có ô dán dữ liệu', el('app').innerHTML.includes('id="bridgeInput"'));
+  click('bridgeSampleSale');
+  ck('điền mẫu hóa đơn bán', el('bridgeInput').value.includes('HD-BR-001'));
+  click('bridgePreview');
+  ck('xem trước dữ liệu mẫu bán', el('bridgeOut').innerHTML.includes('HD-BR-001'));
+  click('bridgeImport');
+  await sleep(20);
+  ck('nạp hóa đơn bán từ JSON', g('S.data.invoices.length') === 3);
+  click('bridgeSamplePur');
+  click('bridgePreview');
+  ck('xem trước dữ liệu mẫu mua', el('bridgeOut').innerHTML.includes('PN-BR-001'));
+  click('bridgeImport');
+  await sleep(20);
+  ck('nạp hóa đơn mua từ JSON', g('S.data.purchases.length') === 2);
+  click('bridgeImport');
+  ck('từ chối mã chứng từ trùng', el('bridgeOut').innerHTML.includes('đã tồn tại'));
+  setVal('bridgeKind', 'sale'); click('bridgeExportJson');
+  await sleep(20);
+  const bridgeJson = downloads[downloads.length - 1].text;
+  ck('xuất JSON có định dạng riêng', JSON.parse(bridgeJson).app === 'quan-ly-hkd');
+  ck('xuất JSON có đủ phiếu', JSON.parse(bridgeJson).invoices.length === 3);
+  click('bridgeExportXml');
+  await sleep(20);
+  ck('xuất XML có thẻ hóa đơn', downloads[downloads.length - 1].text.includes('<invoice>'));
+
   console.log('== Vẽ mọi màn hình ==');
   const routes = {
     setup:'Cài đặt lần đầu', home:'Doanh thu tháng này', sell:'Bán hàng',
-    products:'Quản lý hàng hóa', book:'Sổ sách', tax:'Tính thuế ước tính',
+    products:'Quản lý hàng hóa', purchases:'Phiếu nhập hàng', suppliers:'Nhà cung cấp',
+    stock:'Tồn kho', data:'Cổng dữ liệu hóa đơn', book:'Sổ sách', tax:'Tính thuế ước tính',
     customers:'Khách hàng', expenses:'Chi phí', policy:'Chính sách thuế',
     menu:'Menu', help:'Trợ giúp'
   };
@@ -391,8 +486,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   console.log('== Kiểm tra cấu trúc điều hướng ==');
   const viewKeys = [...code.matchAll(/VIEWS\.(\w+)\s*=\s*function/g)].map(m => m[1]);
-  ck('có đủ màn hình chính', ['setup','home','sell','products','book','tax','customers','expenses','policy','menu','help']
-    .every(k => viewKeys.includes(k)));
+  ck('có đủ màn hình chính', ['setup','home','sell','products','purchases','suppliers','stock','data',
+    'book','tax','customers','expenses','policy','menu','help'].every(k => viewKeys.includes(k)));
   const navRoutes = [...viewsHtml.matchAll(/nav\('(\w+)'/g)].map(m => m[1]).concat(
     [...shellHtml.matchAll(/data-route="(\w+)"/g)].map(m => m[1]));
   ck('mọi mục Menu trỏ tới màn có thật', navRoutes.every(r => viewKeys.includes(r) || r === 'setup'));
@@ -416,6 +511,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   ck('Esc đóng cửa sổ', !el('sheet').classList.contains('on'));
   dispatch('keydown', { key:'5', altKey:true });
   ck('Alt+5 mở Menu', g('S.route') === 'menu');
+  dispatch('keydown', { key:'6', altKey:true });
+  ck('Alt+6 mở Mua hàng', g('S.route') === 'purchases');
+  dispatch('keydown', { key:'7', altKey:true });
+  ck('Alt+7 mở Tồn kho', g('S.route') === 'stock');
+  dispatch('keydown', { key:'8', altKey:true });
+  ck('Alt+8 mở Cổng dữ liệu', g('S.route') === 'data');
 
   console.log('\n' + pass + ' điều đúng, ' + fail + ' điều sai');
   process.exit(fail ? 1 : 0);

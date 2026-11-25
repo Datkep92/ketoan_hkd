@@ -34,8 +34,11 @@ Bấm **Bắt đầu sử dụng**. Cần thêm hộ nữa thì làm ở mục 1
 ## 3. Màn hình "Hôm nay"
 
 Hiện doanh thu hôm nay, doanh thu tháng, doanh thu cả năm; thanh tiến độ so với
-ngưỡng doanh thu (màu vàng khi gần tới, màu đỏ khi đã vượt); nhắc sao lưu khi quá
-7 ngày chưa sao lưu; và bốn lối tắt: Sổ sách, Tính thuế, Khách nợ, Hàng hóa.
+ngưỡng doanh thu (màu vàng khi gần tới, màu đỏ khi đã vượt); quỹ tiền mặt ước
+tính, nhắc sao lưu khi quá 7 ngày chưa sao lưu; cảnh báo khách nợ lâu, hàng tồn
+dưới mức tối thiểu và nợ nhà cung cấp; và bốn lối tắt: Sổ sách, Tính thuế, Khách
+nợ, Hàng hóa. Có ô đặt **Số dư quỹ đầu kỳ** nếu bạn đã có tiền mặt trước khi dùng
+phần mềm.
 
 ## 4. Bán hàng
 
@@ -59,7 +62,9 @@ tăng dần.
 
 Menu → **Hàng hóa**. Mỗi mặt hàng gồm: **Tên hàng**, **Đơn vị tính** (cái, kg, ly…),
 **Nhóm thuế** (quyết định tỷ lệ thuế), **Giá bán**, **Giá vốn**, **Tồn kho hiện
-tại** (để trống hoặc 0 nếu không theo dõi tồn). Nút **Sửa** để sửa hoặc xóa.
+tại** (để trống hoặc 0 nếu không theo dõi tồn) và **Tồn tối thiểu (cảnh báo)** —
+khi tồn xuống dưới mức này, màn Hôm nay sẽ nhắc nhập hàng. Nút **Sửa** để sửa
+hoặc xóa.
 
 ## 6. Sổ sách
 
@@ -68,6 +73,9 @@ Thẻ **Sổ sách**. Chọn **Kỳ** (tháng) để xem:
 - Doanh thu cả kỳ và số hóa đơn.
 - **Doanh thu theo nhóm thuế** — đây là căn cứ tính thuế GTGT.
 - **In bảng kê doanh thu** để lưu hoặc đối chiếu.
+- **Sổ theo dõi** gồm sáu sổ: nhật ký chung, doanh thu bán hàng, mua hàng và
+  chi phí, quỹ tiền mặt, công nợ, tồn kho. Bấm một sổ để xem trước, rồi in ra
+  giấy hoặc xuất tệp Excel.
 - Danh sách hóa đơn trong kỳ: bấm **In** để in lại phiếu cũ, **Xóa** để bỏ hóa đơn
   ghi nhầm.
 
@@ -145,7 +153,39 @@ khi quy định thay đổi thì sửa ở đây chứ không phải sửa phầ
 
 Bấm **Lưu cấu hình** sau khi sửa.
 
-## 13. Phần mềm không làm gì (giới hạn)
+## 13. Mua hàng, nhà cung cấp và tồn kho
+
+Menu → **Mua hàng** (phím tắt Alt+6). Mỗi phiếu nhập có nhà cung cấp, ngày,
+hình thức thanh toán (tiền mặt, chuyển khoản hoặc ghi nợ) và tối đa năm dòng
+hàng: tên hàng, số lượng, đơn giá. Hàng chưa có sẽ được thêm tự động; tồn kho
+và **giá vốn bình quân** được cập nhật ngay. Mã phiếu tự tăng `PN...`.
+
+- Trong danh sách phiếu: **In** phiếu nhập, **Trả hàng** (hoàn tồn và công nợ)
+  hoặc **Xóa** phiếu ghi nhầm (đều có xác nhận).
+- Menu → **Nhà cung cấp**: thêm, sửa, xóa, ghi nợ sẵn; nút **Trả nợ** ghi nhận
+  tiền đã trả và trừ vào nợ.
+- Menu → **Tồn kho**: xem số lượng, giá vốn, giá trị tồn ước tính và lịch sử
+  kiểm kê. Nút **Kiểm kê** đặt lại tồn thực tế; phần mềm ghi chênh lệch và cho
+  phép bỏ lần kiểm kê để trả về số cũ.
+- Sáu sổ theo dõi ở mục 6 đã gồm cả phiếu nhập, trả nợ nhà cung cấp và kiểm kê.
+
+## 14. Cổng dữ liệu hóa đơn
+
+Menu → **Cổng dữ liệu** (phím tắt Alt+8). Đây là chỗ **đối chiếu và nạp dữ
+liệu** JSON/XML từ phần mềm khác; **không phải phát hành hóa đơn điện tử**,
+không gửi dữ liệu đi đâu.
+
+- Bấm **Mẫu bán** hoặc **Mẫu mua** để có ví dụ, bấm **Kiểm tra** để xem trước,
+  rồi bấm **Nạp vào app**. Phần mềm chặn mã trùng và báo số chứng từ đã nạp;
+  nên sao lưu (mục 11) trước khi nạp.
+- Chọn **Hóa đơn bán ra** hoặc **Hóa đơn mua vào**, rồi **Xuất JSON** hoặc
+  **Xuất XML** để đối chiếu hoặc đưa sang phần mềm khác. Tệp xuất không ghi đè
+  tệp sao lưu.
+- Một phiếu là một đối tượng `invoice`, hoặc nhiều phiếu nằm trong mảng
+  `invoices`; mỗi phiếu có `code`, `date`, `partner`, `pay`, `lines` (tên hàng,
+  nhóm thuế, số lượng, đơn giá). Trang này có sẵn ví dụ để copy.
+
+## 15. Phần mềm không làm gì (giới hạn)
 
 - Không phát hành **hóa đơn điện tử** và không **nộp tờ khai** thay bạn; việc đó
   vẫn phải qua kênh chính thức của cơ quan thuế.
@@ -158,7 +198,7 @@ Bấm **Lưu cấu hình** sau khi sửa.
 - Dữ liệu nằm trong trình duyệt của máy. Xóa "dữ liệu trang web" trong cài đặt
   trình duyệt là mất sạch — hãy sao lưu (mục 11).
 
-## 14. Khi có trục trặc
+## 16. Khi có trục trặc
 
 | Hiện tượng | Cách xử lý |
 |---|---|

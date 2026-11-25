@@ -12,10 +12,14 @@ function nav(route, title, sub){
     + '<div class="main"><div class="name">' + title + '</div>'
     + (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div><span class="car">›</span></button>';
 }
-function item(act, title, sub){
-  return '<button class="li" data-act="' + act + '">'
+function item(act, title, sub, id){
+  return '<button class="li" data-act="' + act + '"' + (id ? ' data-id="' + esc(id) + '"' : '') + '>'
     + '<div class="main"><div class="name">' + title + '</div>'
     + (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div><span class="car">›</span></button>';
+}
+
+function payLabel(p){
+  return p === 'debt' ? 'Ghi nợ' : p === 'bank' ? 'Chuyển khoản' : 'Tiền mặt';
 }
 
 /* ---------------------------- cài đặt ---------------------------- */
@@ -67,12 +71,15 @@ VIEWS.home = function(){
     + '<div class="muted">' + dmy(todayISO()) + ' · ' + (h ? SHORT[h.group] || 'Hộ kinh doanh' : 'Hãy cài đặt để bắt đầu') + '</div></div>'
     + '<div class="sp"></div>'
     + '<button class="btn primary" data-act="route" data-route="sell">＋ Bán hàng</button> '
+    + '<button class="btn" data-act="route" data-route="purchases">Mua hàng</button> '
     + '<button class="btn" data-act="route" data-route="book">Xem sổ sách</button></div></div>'
     + '<div class="kpi">'
     + '<div><div class="muted">Doanh thu tháng này</div><div class="big">' + money(rev) + '</div></div>'
     + '<div><div class="muted">Chi phí tháng này</div><div class="big">' + money(exp) + '</div></div>'
     + '<div><div class="muted">Tạm tính lãi</div><div class="big">' + money(rev - exp) + '</div></div>'
     + '<div><div class="muted">Khách còn nợ</div><div class="big">' + money(debt) + '</div></div>'
+    + '<div><div class="muted">Nợ nhà cung cấp</div><div class="big">' + money(sum(sups().map(s => s.debt || 0))) + '</div></div>'
+    + '<div><div class="muted">Quỹ tiền mặt ước tính</div><div class="big">' + money(cashOnHand()) + '</div></div>'
     + '</div>'
     + (pol.threshold > 0
       ? '<div class="card ' + (warn ? 'warn' : '') + '"><div class="row"><b>Doanh thu năm so với ngưỡng ' + money(pol.threshold) + '</b>'
@@ -80,6 +87,24 @@ VIEWS.home = function(){
         + '<div class="bar"><i class="' + (warn ? 'warn' : '') + '" style="width:' + ratio + '%"></i></div>'
         + '<div class="muted small">' + money(revYearNow(h ? h.id : null)) + ' đã ghi nhận trong năm ' + y + '.</div></div>'
       : '<div class="card warn">Chưa đặt ngưỡng doanh thu. Vào <b>Chính sách thuế</b> để đặt trước khi tính thuế.</div>')
+    + (alerts().length
+      ? '<div class="card warn"><b>Cảnh báo</b>'
+        + alerts().map(a => '<div class="alertline">• ' + esc(a.t) + '</div>').join('') + '</div>'
+      : '')
+    + '<div class="grid2">'
+    + '<div class="card"><div class="row wrap"><h3 style="margin:0">Doanh thu 6 tháng</h3><div class="sp"></div>'
+    + '<span class="muted small">Đơn vị: đồng</span></div>'
+    + '<div class="spark">' + monthlyRev(6).map(x => {
+        const hi = Math.max(1, ...monthlyRev(6).map(z => z.value));
+        return '<div><i style="height:' + Math.max(3, Math.round(x.value / hi * 100)) + '%"></i>'
+          + '<small>' + esc(x.label) + '</small></div>';
+      }).join('') + '</div></div>'
+    + '<div class="card"><h3 style="margin:0 0 10px">Số dư quỹ đầu kỳ</h3>'
+    + '<div class="row wrap"><label class="f" style="margin:0"><span>Số tiền (đồng)</span>'
+    + '<input type="number" inputmode="numeric" id="cashStart" value="' + n0((S.data.settings || {}).cashStart) + '"></label>'
+    + '<button class="btn sm" data-act="saveCashStart">Lưu</button></div>'
+    + '<p class="muted small">Quỹ ước tính từ các phiếu đã ghi; không thay cho sổ quỹ và sao kê ngân hàng.</p></div>'
+    + '</div>'
     + '<div class="grid2">'
     + '<div class="card"><h3>Bán trong hôm nay</h3>'
     + (todayInv.length
@@ -91,6 +116,9 @@ VIEWS.home = function(){
     + '<div class="card"><h3>Thao tác nhanh</h3>'
     + nav('products', 'Hàng hóa', 'Thêm, sửa giá, theo dõi tồn')
     + nav('customers', 'Khách hàng', 'Ghi nợ, thu nợ')
+    + nav('purchases', 'Mua hàng', 'Nhập kho, trả nợ nhà cung cấp')
+    + nav('stock', 'Tồn kho', 'Kiểm kê, mức tối thiểu')
+    + nav('data', 'Cổng dữ liệu', 'Nhập/xuất hóa đơn JSON, XML')
     + nav('expenses', 'Chi phí', 'Ghi chi phí, in phiếu')
     + nav('policy', 'Chính sách thuế', 'Ngưỡng, thuế suất, giảm thuế')
     + '</div></div>'
@@ -158,14 +186,133 @@ VIEWS.products = function(){
     + '</div>'
     + (list.length
       ? '<div class="tablewrap"><table class="tbl"><tr><th>Tên hàng</th><th>Nhóm thuế</th><th>Đơn vị</th>'
-        + '<th class="r">Giá</th><th class="r">Tồn</th><th class="act">Thao tác</th></tr>'
+        + '<th class="r">Giá</th><th class="r">Tồn</th><th class="r">Tối thiểu</th><th class="act">Thao tác</th></tr>'
         + list.map(p => '<tr><td><b>' + esc(p.name) + '</b></td><td>' + esc(SHORT[p.group] || 'Khác') + '</td>'
           + '<td>' + esc(p.unit || 'Cái') + '</td><td class="r num">' + money(p.price) + '</td>'
-          + '<td class="r num">' + (p.stock != null ? fmt(p.stock) : '—') + '</td>'
-          + '<td class="act"><button class="btn sm" data-act="editProduct" data-id="' + p.id + '">Sửa</button> '
+          + '<td class="r num' + (n0(p.minStock) > 0 && n0(p.stock) < n0(p.minStock) ? ' low' : '') + '">'
+          + (p.stock != null ? fmt(p.stock) : '—') + '</td>'
+          + '<td class="r num">' + (n0(p.minStock) > 0 ? fmt(p.minStock) : '—') + '</td>'
+          + '<td class="act"><button class="btn sm" data-act="stockAdjust" data-id="' + p.id + '">Kiểm kê</button> '
+          + '<button class="btn sm" data-act="editProduct" data-id="' + p.id + '">Sửa</button> '
           + '<button class="btn sm danger" data-act="delProduct" data-id="' + p.id + '">Xóa</button></td></tr>').join('')
         + '</table></div>'
       : '<div class="card empty">' + (q ? 'Không tìm thấy hàng.' : 'Chưa có hàng hóa. Nhấn Thêm hàng để bắt đầu.') + '</div>')
+    + '</div>';
+};
+
+/* ---------------------------- mua hàng ---------------------------- */
+VIEWS.purchases = function(){
+  const list = purs().slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  const total = sum(list.filter(p => !p.returned).map(p => p.total));
+  const sd = sum(sups().map(s => s.debt || 0));
+  return '<div class="pad">'
+    + '<div class="card"><div class="row wrap"><div><h2 style="margin:0">Mua hàng</h2>'
+    + '<div class="muted">Lập phiếu nhập, cập nhật tồn kho và công nợ nhà cung cấp.</div></div><div class="sp"></div>'
+    + '<button class="btn primary" data-act="addPurchase">＋ Phiếu nhập</button> '
+    + '<button class="btn sm" data-act="route" data-route="suppliers">Nhà cung cấp</button> '
+    + '<button class="btn sm" data-act="route" data-route="stock">Tồn kho</button></div></div>'
+    + '<div class="kpi"><div><div class="muted">Tổng mua còn hiệu lực</div><div class="big">' + money(total) + '</div></div>'
+    + '<div><div class="muted">Nợ nhà cung cấp</div><div class="big">' + money(sd) + '</div></div>'
+    + '<div><div class="muted">Số phiếu</div><div class="big">' + fmt(list.length) + '</div></div></div>'
+    + '<div class="card"><h3 style="margin:0 0 10px">Phiếu nhập hàng</h3>'
+    + (list.length
+      ? '<div class="tablewrap"><table class="tbl"><tr><th>Ngày</th><th>Mã</th><th>Nhà cung cấp</th>'
+        + '<th class="r">Thành tiền</th><th>Trả</th><th class="act">Thao tác</th></tr>'
+        + list.map(p => '<tr><td>' + dmy(p.date) + '</td><td>' + esc(p.code || '') + '</td>'
+          + '<td>' + esc(p.supplier || '') + (p.returned ? ' <span class="warn">đã trả</span>' : '') + '</td>'
+          + '<td class="r num">' + money(p.total) + '</td><td>' + esc(payLabel(p.pay)) + '</td><td class="act">'
+          + '<button class="btn sm" data-act="printPurchase" data-id="' + p.id + '">In</button> '
+          + (p.returned ? '' : '<button class="btn sm" data-act="returnPurchase" data-id="' + p.id + '">Trả hàng</button> ')
+          + '<button class="btn sm danger" data-act="delPurchase" data-id="' + p.id + '">Xóa</button></td></tr>').join('')
+        + '</table></div>'
+      : '<div class="empty">Chưa có phiếu nhập. Nhấn Phiếu nhập để ghi hàng mua vào kho.</div>')
+    + '</div>'
+    + '<div class="card"><div class="row wrap"><h3 style="margin:0">Nhà cung cấp nợ nhiều</h3><div class="sp"></div>'
+    + '<button class="btn sm" data-act="route" data-route="suppliers">Xem tất cả</button></div>'
+    + (sups().filter(s => n0(s.debt) > 0).length
+      ? sups().filter(s => n0(s.debt) > 0).slice(0, 5).map(s => '<div class="cartrow">'
+        + '<div class="cn"><div class="name">' + esc(s.name) + '</div><div class="muted small">Còn nợ</div></div>'
+        + '<b class="num">' + money(s.debt) + '</b> <button class="btn sm" data-act="paySupplier" data-id="' + s.id + '">Trả nợ</button></div>').join('')
+      : '<div class="empty">Không còn nợ nhà cung cấp.</div>')
+    + '</div></div>';
+};
+
+VIEWS.suppliers = function(){
+  const list = sups();
+  return '<div class="pad"><div class="card"><div class="row wrap"><div><h2 style="margin:0">Nhà cung cấp</h2>'
+    + '<div class="muted">' + fmt(list.length) + ' nhà cung cấp của hộ này.</div></div><div class="sp"></div>'
+    + '<button class="btn primary" data-act="addSupplier">＋ Thêm</button></div>'
+    + (list.length
+      ? '<div class="tablewrap"><table class="tbl"><tr><th>Tên</th><th>Điện thoại</th><th>Địa chỉ</th>'
+        + '<th class="r">Còn nợ</th><th class="act">Thao tác</th></tr>'
+        + list.map(s => '<tr><td><b>' + esc(s.name) + '</b></td><td>' + esc(s.phone || '') + '</td>'
+          + '<td>' + esc(s.address || '') + '</td><td class="r num">' + money(s.debt || 0) + '</td><td class="act">'
+          + '<button class="btn sm" data-act="paySupplier" data-id="' + s.id + '">Trả nợ</button> '
+          + '<button class="btn sm" data-act="editSupplier" data-id="' + s.id + '">Sửa</button> '
+          + '<button class="btn sm danger" data-act="delSupplier" data-id="' + s.id + '">Xóa</button></td></tr>').join('')
+        + '</table></div>'
+      : '<div class="empty">Chưa có nhà cung cấp. Nhấn Thêm để bắt đầu.</div>')
+    + '</div></div>';
+};
+
+VIEWS.stock = function(){
+  const list = prods(), low = lowStocks(), logs = stockLogs().slice().reverse();
+  const value = sum(list.map(p => n0(p.stock) * n0(p.cost)));
+  return '<div class="pad">'
+    + '<div class="card"><div class="row wrap"><div><h2 style="margin:0">Tồn kho</h2>'
+    + '<div class="muted">Tồn được cập nhật khi bán, nhập hàng và kiểm kê.</div></div><div class="sp"></div>'
+    + '<button class="btn sm" data-act="route" data-route="purchases">Nhập hàng</button></div></div>'
+    + '<div class="kpi"><div><div class="muted">Mặt hàng</div><div class="big">' + fmt(list.length) + '</div></div>'
+    + '<div><div class="muted">Giá trị tồn ước tính</div><div class="big">' + money(value) + '</div></div>'
+    + '<div><div class="muted">Dưới mức tối thiểu</div><div class="big">' + fmt(low.length) + '</div></div></div>'
+    + (low.length ? '<div class="card warn"><b>Cần nhập thêm</b>'
+      + low.map(p => '<div class="alertline">• ' + esc(p.name) + ': tồn ' + fmt(p.stock) + ', tối thiểu ' + fmt(p.minStock) + '</div>').join('')
+      + '</div>' : '')
+    + '<div class="card"><h3 style="margin:0 0 10px">Danh sách tồn kho</h3>'
+    + (list.length
+      ? '<div class="tablewrap"><table class="tbl"><tr><th>Hàng hóa</th><th class="r">Tồn</th><th class="r">Giá vốn</th>'
+        + '<th class="r">Giá trị</th><th class="act">Thao tác</th></tr>'
+        + list.map(p => '<tr><td>' + esc(p.name) + '</td><td class="r num">' + fmt(p.stock) + '</td>'
+          + '<td class="r num">' + money(p.cost) + '</td><td class="r num">' + money(n0(p.stock) * n0(p.cost)) + '</td>'
+          + '<td class="act"><button class="btn sm" data-act="stockAdjust" data-id="' + p.id + '">Kiểm kê</button></td></tr>').join('')
+        + '</table></div>'
+      : '<div class="empty">Chưa có hàng hóa.</div>')
+    + '</div>'
+    + '<div class="card"><h3 style="margin:0 0 10px">Lịch sử kiểm kê</h3>'
+    + (logs.length
+      ? '<div class="tablewrap"><table class="tbl"><tr><th>Ngày</th><th>Hàng hóa</th><th class="r">Thay đổi</th><th>Lý do</th><th class="act"></th></tr>'
+        + logs.map(a => '<tr><td>' + dmy(a.date) + '</td><td>' + esc(a.product || '') + '</td>'
+          + '<td class="r num">' + (n0(a.delta) > 0 ? '+' : '') + fmt(a.delta) + '</td><td>' + esc(a.reason || '') + '</td>'
+          + '<td class="act"><button class="btn sm danger" data-act="delStockAdj" data-id="' + a.id + '">×</button></td></tr>').join('')
+        + '</table></div>'
+      : '<div class="empty">Chưa có lần kiểm kê nào.</div>')
+    + '</div></div>';
+};
+
+VIEWS.data = function(){
+  return '<div class="pad"><div class="card"><div><h2 style="margin:0">Cổng dữ liệu hóa đơn</h2>'
+    + '<p class="muted">Nhận dữ liệu JSON/XML từ phần mềm khác, hoặc xuất dữ liệu để đối chiếu. '
+    + 'Dữ liệu chỉ nạp vào trình duyệt này; không gửi đi đâu.</p></div>'
+    + '<div class="row wrap"><label class="f" style="margin:0"><span>Loại phiếu để xuất</span><select id="bridgeKind">'
+    + '<option value="sale">Hóa đơn bán ra</option><option value="purchase">Hóa đơn mua vào</option></select></label>'
+    + '<button class="btn sm" data-act="bridgeSampleSale">Mẫu bán</button> '
+    + '<button class="btn sm" data-act="bridgeSamplePur">Mẫu mua</button> '
+    + '<button class="btn sm" data-act="bridgePreview">Kiểm tra</button> '
+    + '<button class="btn primary sm" data-act="bridgeImport">Nạp vào app</button></div>'
+    + '<div class="row wrap" style="margin-top:10px"><button class="btn sm" data-act="bridgeExportJson">Xuất JSON</button> '
+    + '<button class="btn sm" data-act="bridgeExportXml">Xuất XML</button></div>'
+    + '<label class="f" style="margin-top:12px"><span>Dán JSON/XML vào đây</span>'
+    + '<textarea id="bridgeInput" spellcheck="false" placeholder=\'{"kind":"sale","code":"HD-001",...}\'></textarea></label>'
+    + '<div id="bridgeOut" class="bridgeout"></div></div>'
+    + '<div class="card"><h3 style="margin:0 0 10px">Quy ước dữ liệu</h3>'
+    + '<p class="muted small">Một phiếu là một đối tượng <b>invoice</b>, hoặc nhiều phiếu nằm trong mảng <b>invoices</b>. '
+    + 'Tên trường chấp nhận cả tiếng Anh và tiếng Việt; loại phiếu là <b>sale</b> hoặc <b>purchase</b> (mua/nhập).</p>'
+    + '<pre class="code">'
+    + '{ "kind":"sale", "code":"HD-001", "date":"2026-03-05",\n'
+    + '  "partner":"Khách lẻ", "pay":"cash", "discount":0,\n'
+    + '  "lines":[ { "name":"Gạo", "qty":2, "price":18000 } ] }</pre>'
+    + '<p class="muted small">Mã phiếu trùng sẽ bị từ chối. Phiếu mua tự tạo nhà cung cấp và hàng hóa nếu chưa có; '
+    + 'phiếu bán ghi nợ nếu chọn thanh toán <b>debt</b>. App không phát hành hóa đơn điện tử, không nộp tờ khai thay.</p></div>'
     + '</div>';
 };
 
@@ -179,6 +326,9 @@ VIEWS.book = function(){
   return '<div class="pad"><div class="card"><div class="row wrap"><div><h2>Sổ sách</h2>'
     + '<div class="muted">Xem theo tháng, in bảng kê và xuất ra tệp CSV.</div></div><div class="sp"></div>'
     + '<label class="f" style="margin:0"><span>Tháng</span><input type="month" id="bookMonth" value="' + esc(m) + '"></label></div></div>'
+    + '<div class="card"><div class="row wrap"><h3 style="margin:0">Sổ theo dõi</h3><div class="sp"></div>'
+    + '<span class="muted small">In hoặc xuất ra tệp Excel</span></div>'
+    + BOOKS.map(b => item('bookInfo', b.code + ' — ' + b.name, b.sub, b.k)).join('') + '</div>'
     + '<div class="card"><div class="row wrap"><h3 style="margin:0">Lịch sử bán hàng</h3><div class="sp"></div>'
     + '<button class="btn sm" data-act="exportBook">Xuất CSV</button> '
     + '<button class="btn sm" data-act="printBook">In bảng kê</button></div>'
@@ -360,12 +510,18 @@ VIEWS.menu = function(){
     + '<div class="muted">' + (h ? esc(h.name) : 'Chưa có hộ kinh doanh') + '</div></div>'
     + '<div class="grid2">'
     + '<div class="card"><h3>Quản lý</h3>'
+    + nav('sell', 'Bán hàng', 'Lập phiếu, in, ghi nợ')
     + nav('products', 'Hàng hóa', 'Thêm, sửa, xóa mặt hàng')
+    + nav('purchases', 'Mua hàng', 'Phiếu nhập, nhà cung cấp')
+    + nav('stock', 'Tồn kho', 'Kiểm kê, cảnh báo tồn thấp')
     + nav('customers', 'Khách hàng', 'Ghi nợ, thu nợ')
     + nav('expenses', 'Chi phí', 'Ghi chép và in phiếu chi')
+    + nav('book', 'Sổ sách', 'Sáu sổ, in và xuất Excel')
+    + nav('tax', 'Thuế', 'Ước tính GTGT và TNCN')
     + nav('policy', 'Chính sách thuế', 'Ngưỡng, thuế suất, giảm 30%')
     + '</div>'
     + '<div class="card"><h3>Dữ liệu và hỗ trợ</h3>'
+    + nav('data', 'Cổng dữ liệu hóa đơn', 'Nhập/xuất JSON, XML')
     + item('backup', 'Sao lưu ra tệp JSON', 'Lưu định kỳ ở nơi an toàn')
     + item('restore', 'Nhập từ tệp JSON', 'Ghi đè dữ liệu hiện có sau khi xác nhận')
     + item('switchHH', 'Đổi hộ kinh doanh', 'Thêm hộ mới, chuyển hộ, xóa hộ')
@@ -385,7 +541,9 @@ VIEWS.help = function(){
     + '<p>1. Cài đặt ngưỡng doanh thu và thêm hộ kinh doanh.<br>'
     + '2. Vào Hàng hóa để thêm mặt hàng và nhóm thuế.<br>'
     + '3. Vào Bán hàng: chọn hàng, nhập khách, chọn hình thức thu, nhấn Lưu phiếu.<br>'
-    + '4. Vào Sổ sách để xem, in phiếu, xuất CSV; vào Thuế để xem số ước tính.</p>'
+    + '4. Vào Mua hàng để ghi phiếu nhập, Nhà cung cấp để trả nợ, Tồn kho để kiểm kê.<br>'
+    + '5. Vào Sổ sách để xem, in, xuất Excel sáu sổ; vào Thuế để xem số ước tính.<br>'
+    + '6. Vào Cổng dữ liệu nếu cần nhận hóa đơn JSON/XML từ phần mềm khác.</p>'
     + '<h3>Giới hạn cần nhớ</h3>'
     + '<p class="muted">App <b>không</b> phát hành hóa đơn điện tử, <b>không</b> nộp tờ khai thay, <b>không</b> tự cập nhật luật. Số thuế chỉ là ước tính từ các phiếu đã ghi, cần đối chiếu với quy định hiện hành.</p>'
     + '<p class="muted">In ấn dùng hộp thoại in của trình duyệt (AirPrint hoặc Lưu thành PDF). Chưa hỗ trợ máy in hóa đơn khổ nhiệt 58/80 mm.</p>'

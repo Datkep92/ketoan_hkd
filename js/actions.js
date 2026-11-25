@@ -18,8 +18,10 @@ function productForm(p){
     + '</div><div class="grid2">'
     + '<label class="f"><span>Giá bán</span><input type="number" inputmode="numeric" id="gPrice" value="' + n0(p.price || 0) + '"></label>'
     + '<label class="f"><span>Giá vốn</span><input type="number" inputmode="numeric" id="gCost" value="' + n0(p.cost || 0) + '"></label>'
-    + '</div>'
+    + '</div><div class="grid2">'
     + '<label class="f"><span>Tồn kho hiện tại</span><input type="number" inputmode="numeric" id="gStock" value="' + n0(p.stock || 0) + '"></label>'
+    + '<label class="f"><span>Tồn tối thiểu (cảnh báo)</span><input type="number" inputmode="numeric" id="gMinStock" value="' + n0(p.minStock || 0) + '"></label>'
+    + '</div>'
     + '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="saveProduct" data-id="' + esc(p.id || '') + '">Lưu</button> '
     + '<button class="btn" data-act="closeSheet">Hủy</button>'
     + (p.id ? ' <button class="btn danger" data-act="delProduct" data-id="' + esc(p.id) + '">Xóa hàng</button>' : '')
@@ -63,6 +65,100 @@ function paymentForm(c){
     + (list.length ? '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="savePayment">Lưu</button> '
         + '<button class="btn" data-act="closeSheet">Hủy</button></div>'
       : '<p class="muted small">Chưa có khách hàng để thu nợ.</p>');
+}
+
+function supplierForm(s){
+  s = s || {};
+  return '<h2>' + (s.id ? 'Sửa nhà cung cấp' : 'Thêm nhà cung cấp') + '</h2>'
+    + '<label class="f"><span>Tên nhà cung cấp *</span><input type="text" id="sName" value="' + esc(s.name || '') + '"></label>'
+    + '<div class="grid2">'
+    + '<label class="f"><span>Điện thoại</span><input type="text" inputmode="tel" id="sPhone" value="' + esc(s.phone || '') + '"></label>'
+    + '<label class="f"><span>Địa chỉ</span><input type="text" id="sAddress" value="' + esc(s.address || '') + '"></label></div>'
+    + '<label class="f"><span>Công nợ hiện tại (đồng)</span><input type="number" inputmode="numeric" id="sDebt" value="' + n0(s.debt || 0) + '"></label>'
+    + '<input type="hidden" id="sId" value="' + esc(s.id || '') + '">'
+    + '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="saveSupplier">Lưu</button> '
+    + '<button class="btn" data-act="closeSheet">Hủy</button></div>';
+}
+
+function supplierPayForm(s){
+  return '<h2>Trả nợ nhà cung cấp</h2>'
+    + '<p class="muted small">' + esc(s.name || '') + ' · còn nợ ' + money(s.debt || 0) + '</p>'
+    + '<div class="grid2">'
+    + '<label class="f"><span>Số tiền trả</span><input type="number" inputmode="numeric" id="spAmount" value="' + n0(s.debt || 0) + '"></label>'
+    + '<label class="f"><span>Ngày</span><input type="date" id="spDate" value="' + todayISO() + '"></label></div>'
+    + '<label class="f"><span>Ghi chú</span><input type="text" id="spNote" placeholder="số biên lai, chuyển khoản..."></label>'
+    + '<input type="hidden" id="spId" value="' + esc(s.id || '') + '">'
+    + '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="doPaySupplier">Lưu</button> '
+    + '<button class="btn" data-act="closeSheet">Hủy</button></div>';
+}
+
+function purchaseForm(){
+  const names = prods().map(p => p.name || '').filter(Boolean);
+  const supNames = sups().map(s => s.name || '').filter(Boolean);
+  let rows = '';
+  for (let i = 0; i < 5; i++){
+    rows += '<tr><td><input type="text" id="plName' + i + '" list="purProds" placeholder="Tên hàng"></td>'
+      + '<td><input type="number" inputmode="numeric" id="plQty' + i + '" value="1" min="0"></td>'
+      + '<td><input type="number" inputmode="numeric" id="plPrice' + i + '" placeholder="Đơn giá"></td></tr>';
+  }
+  return '<h2>Phiếu nhập hàng</h2>'
+    + '<div class="grid2">'
+    + '<label class="f"><span>Nhà cung cấp</span><input type="text" id="purSupplier" list="purSupList" placeholder="Tên nhà cung cấp"></label>'
+    + '<label class="f"><span>Ngày nhập</span><input type="date" id="purDate" value="' + todayISO() + '"></label></div>'
+    + '<datalist id="purSupList">' + supNames.map(n => '<option value="' + esc(n) + '"></option>').join('') + '</datalist>'
+    + '<datalist id="purProds">' + names.map(n => '<option value="' + esc(n) + '"></option>').join('') + '</datalist>'
+    + '<div class="grid2"><label class="f"><span>Thanh toán</span><select id="purPay">'
+    + '<option value="cash">Tiền mặt</option><option value="bank">Chuyển khoản</option>'
+    + '<option value="debt">Ghi nợ nhà cung cấp</option></select></label>'
+    + '<label class="f"><span>Ghi chú</span><input type="text" id="purNote" placeholder="Không bắt buộc"></label></div>'
+    + '<h3 style="margin:14px 0 6px">Hàng nhập</h3>'
+    + '<div class="tablewrap"><table class="tbl"><tr><th>Tên hàng</th><th style="width:80px">SL</th><th style="width:130px">Đơn giá</th></tr>'
+    + rows + '</table></div>'
+    + '<p class="muted small">Tồn và giá vốn sẽ được cập nhật theo giá vốn bình quân. '
+    + 'Mặt hàng chưa có sẽ được thêm tự động.</p>'
+    + '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="savePurchase">Lưu phiếu nhập</button> '
+    + '<button class="btn" data-act="closeSheet">Hủy</button></div>';
+}
+
+function stockAdjustForm(p){
+  return '<h2>Kiểm kê tồn kho</h2>'
+    + '<p class="muted small">' + esc(p.name || '') + ' · tồn hiện tại ' + fmt(p.stock) + ' ' + esc(p.unit || '') + '</p>'
+    + '<div class="grid2">'
+    + '<label class="f"><span>Tồn thực tế sau kiểm kê</span><input type="number" inputmode="numeric" id="adjStock" value="' + n0(p.stock) + '"></label>'
+    + '<label class="f"><span>Ngày</span><input type="date" id="adjDate" value="' + todayISO() + '"></label></div>'
+    + '<label class="f"><span>Lý do</span><input type="text" id="adjReason" placeholder="kiểm kê, hư hỏng, trả lại..."></label>'
+    + '<input type="hidden" id="adjId" value="' + esc(p.id || '') + '">'
+    + '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="saveStockAdj">Lưu</button> '
+    + '<button class="btn" data-act="closeSheet">Hủy</button></div>';
+}
+
+function bridgeOut(text, ok){
+  const box = $('#bridgeOut');
+  if (box) box.innerHTML = '<pre class="' + (ok ? 'ok' : 'warn') + '">' + esc(text) + '</pre>';
+}
+
+function printPurchase(p){
+  const rows = (p.lines || []).map(l =>
+    '<tr><td>' + esc(l.name) + '</td><td class="r">' + fmt(l.qty) + '</td>'
+    + '<td class="r num">' + money(l.price) + '</td><td class="r num">' + money(n0(l.qty) * n0(l.price)) + '</td></tr>').join('');
+  printHtml(docHead('PHIẾU NHẬP HÀNG', 'Số: ' + esc(p.code || '') + ' · Ngày: ' + dmy(p.date))
+    + '<div class="small">Nhà cung cấp: ' + esc(p.supplier || '') + '</div>'
+    + '<table><tr><th>Hàng hóa</th><th class="r">SL</th><th class="r">Đơn giá</th><th class="r">Thành tiền</th></tr>' + rows
+    + '<tr><th colspan="3">Cộng tiền hàng</th><th class="r num">' + money(p.subtotal) + '</th></tr>'
+    + (p.discount ? '<tr><td colspan="3">Giảm trừ</td><td class="r num">-' + money(p.discount) + '</td></tr>' : '')
+    + '<tr><th colspan="3">Phải trả nhà cung cấp</th><th class="r num">' + money(p.total) + '</th></tr></table>'
+    + '<div class="small">Thanh toán: ' + payLabel(p.pay) + (p.note ? ' · Ghi chú: ' + esc(p.note) : '') + '</div>'
+    + docFoot());
+}
+
+function printBookSheet(k){
+  const b = bookRows(k, S.bookMonth);
+  const head = '<tr>' + b.head.map(h => '<th>' + esc(h) + '</th>').join('') + '</tr>';
+  const rows = b.rows.map(r => '<tr>' + r.map(v => '<td>' + esc(v) + '</td>').join('') + '</tr>').join('');
+  printHtml(docHead(b.title, 'Lập từ dữ liệu đã ghi trong phần mềm')
+    + '<table>' + head + rows + '</table>'
+    + '<div class="small">Sổ theo dõi nội bộ; số liệu cần đối chiếu trước khi quyết toán thuế. '
+    + 'Không thay thế hóa đơn điện tử hay tờ khai chính thức.</div>' + docFoot());
 }
 
 /* ---------------------------- in ấn ---------------------------- */
@@ -198,7 +294,8 @@ document.addEventListener('click', (e) => {
       if (!confirm('Xóa hộ này cùng toàn bộ dữ liệu của hộ? Không khôi phục được.')) break;
       const total = hhs().length;
       S.data.households = hhs().filter(x => x.id !== id);
-      ['products','invoices','customers','expenses','payments','taxpay'].forEach(k => {
+      ['products','invoices','customers','expenses','payments','taxpay',
+       'suppliers','purchases','supplierPayments','stockAdj'].forEach(k => {
         S.data[k] = S.data[k].filter(x => x.hid !== id);
       });
       if (S.hid === id) S.hid = hhs().length ? hhs()[0].id : null;
@@ -219,7 +316,8 @@ document.addEventListener('click', (e) => {
       if (!name){ toast('Cần nhập tên hàng'); break; }
       const data = {
         name, unit: val('gUnit'), group: val('gGroup') || 'goods',
-        price: numv('gPrice'), cost: numv('gCost'), stock: numv('gStock')
+        price: numv('gPrice'), cost: numv('gCost'), stock: numv('gStock'),
+        minStock: numv('gMinStock')
       };
       if (id){
         const p = S.data.products.find(x => x.id === id);
@@ -272,11 +370,7 @@ document.addEventListener('click', (e) => {
         customer: cust ? cust.name : name, customerId: cust ? cust.id : '', note: val('note')
       };
       S.data.invoices.push(inv);
-      inv.lines.forEach(l => {
-        const p = S.data.products.find(x => x.id === l.pid);
-        if (p && p.stock != null) p.stock = n0(p.stock) - l.qty;
-      });
-      if (pay === 'debt' && cust) cust.debt = n0(cust.debt) + inv.total;
+      applySale(inv);
       saveAll();
       S.cart = [];
       render(); printInvoice(inv); toast('Đã lưu phiếu ' + inv.code);
@@ -315,6 +409,214 @@ document.addEventListener('click', (e) => {
       break;
     }
     case 'printBook': printBook(); break;
+    case 'bookInfo': {
+      const b = BOOKS.find(x => x.k === id);
+      if (!b) break;
+      const d = bookRows(b.k, S.bookMonth);
+      sheet('<h2>' + esc(b.code + ' — ' + b.name) + '</h2>'
+        + '<p class="muted small">' + esc(b.sub) + ' · tháng ' + esc(S.bookMonth) + ' · '
+        + fmt(d.rows.length) + ' dòng</p>'
+        + '<div class="tablewrap"><table class="tbl"><tr>' + d.head.map(h => '<th>' + esc(h) + '</th>').join('') + '</tr>'
+        + d.rows.slice(0, 10).map(r => '<tr>' + r.map(v => '<td>' + esc(v) + '</td>').join('') + '</tr>').join('')
+        + '</table></div>'
+        + (d.rows.length > 10 ? '<p class="muted small">Xem trước 10 dòng đầu.</p>' : '')
+        + '<div class="row" style="margin-top:12px">'
+        + '<button class="btn primary" data-act="bookPrint" data-id="' + b.k + '">In sổ</button> '
+        + '<button class="btn" data-act="bookExport" data-id="' + b.k + '">Xuất Excel</button> '
+        + '<button class="btn" data-act="closeSheet">Đóng</button></div>');
+      break;
+    }
+    case 'bookPrint': printBookSheet(id); break;
+    case 'bookExport': {
+      const b = BOOKS.find(x => x.k === id);
+      if (!b) break;
+      const d = bookRows(b.k, S.bookMonth);
+      downloadText('so-' + b.k + '-' + S.bookMonth + '.xml', excelSheet(d.title, d.head, d.rows),
+        'application/vnd.ms-excel;charset=utf-8');
+      toast('Đã xuất sổ ' + b.code);
+      break;
+    }
+
+    /* mua hàng và nhà cung cấp */
+    case 'saveCashStart': {
+      S.data.settings.cashStart = Math.max(0, numv('cashStart'));
+      saveAll(); render(); toast('Đã lưu số dư quỹ đầu kỳ');
+      break;
+    }
+    case 'addPurchase': sheet(purchaseForm()); break;
+    case 'savePurchase': {
+      const lines = [];
+      for (let i = 0; i < 5; i++){
+        const name = val('plName' + i);
+        if (!name) continue;
+        const qty = Math.max(0, numv('plQty' + i) || 1);
+        const known = prods().find(x => (x.name || '').toLowerCase() === name.toLowerCase()) || {};
+        const price = numv('plPrice' + i) || n0(known.cost);
+        if (qty > 0 && price > 0) lines.push({ pid:'', name, qty, price, group:known.group || 'goods' });
+      }
+      if (!lines.length){ toast('Cần ít nhất một dòng hàng có tên và đơn giá'); break; }
+      const nm = val('purSupplier').trim();
+      let s = nm ? sups().find(x => (x.name || '').toLowerCase() === nm.toLowerCase()) : null;
+      if (!s && nm){
+        s = { id:uid(), hid:S.hid, name:nm, phone:'', address:'', debt:0 };
+        S.data.suppliers.push(s);
+      }
+      const subtotal = sum(lines.map(l => l.qty * l.price));
+      const p = { id:uid(), hid:S.hid, code:purCode(), date:val('purDate') || todayISO(),
+        supplierId:s ? s.id : '', supplier:s ? s.name : nm, lines, subtotal, discount:0,
+        total:subtotal, pay:val('purPay') || 'cash', note:val('purNote') };
+      S.data.purchases.push(p);
+      applyPurchase(p);
+      saveAll(); closeSheet(); render(); toast('Đã lưu phiếu nhập ' + p.code);
+      break;
+    }
+    case 'printPurchase': {
+      const p = purs().find(x => x.id === id);
+      if (p) printPurchase(p);
+      break;
+    }
+    case 'returnPurchase': {
+      const p = purs().find(x => x.id === id);
+      if (!p || p.returned) break;
+      if (!confirm('Trả hàng phiếu ' + p.code + '? Tồn và công nợ sẽ được hoàn lại.')) break;
+      undoPurchase(p);
+      p.returned = true;
+      saveAll(); render(); toast('Đã đánh dấu trả hàng phiếu ' + p.code);
+      break;
+    }
+    case 'delPurchase': {
+      const p = purs().find(x => x.id === id);
+      if (!p) break;
+      if (!confirm('Xóa phiếu nhập ' + p.code + '? Tồn và công nợ sẽ được hoàn lại.')) break;
+      undoPurchase(p);
+      S.data.purchases = S.data.purchases.filter(x => x.id !== id);
+      saveAll(); render(); toast('Đã xóa phiếu nhập');
+      break;
+    }
+    case 'addSupplier': sheet(supplierForm(null)); break;
+    case 'editSupplier': {
+      const s = sups().find(x => x.id === id);
+      if (s) sheet(supplierForm(s));
+      break;
+    }
+    case 'saveSupplier': {
+      const name = val('sName');
+      if (!name){ toast('Cần nhập tên nhà cung cấp'); break; }
+      const data = { name, phone:val('sPhone'), address:val('sAddress'), debt:numv('sDebt') };
+      const sid = val('sId');
+      if (sid){
+        const s = sups().find(x => x.id === sid);
+        if (s) Object.assign(s, data);
+      } else {
+        S.data.suppliers.push(Object.assign({ id:uid(), hid:S.hid }, data));
+      }
+      saveAll(); closeSheet(); render(); toast('Đã lưu nhà cung cấp');
+      break;
+    }
+    case 'delSupplier': {
+      if (!confirm('Xóa nhà cung cấp này? Các phiếu nhập cũ vẫn giữ tên.')) break;
+      S.data.suppliers = S.data.suppliers.filter(x => x.id !== id);
+      saveAll(); closeSheet(); render();
+      break;
+    }
+    case 'paySupplier': {
+      const s = sups().find(x => x.id === id);
+      if (s) sheet(supplierPayForm(s));
+      break;
+    }
+    case 'doPaySupplier': {
+      const s = sups().find(x => x.id === val('spId'));
+      if (!s){ toast('Cần chọn nhà cung cấp'); break; }
+      const amt = Math.min(Math.max(0, numv('spAmount')), n0(s.debt));
+      if (amt <= 0){ toast('Số tiền không hợp lệ'); break; }
+      s.debt = n0(s.debt) - amt;
+      S.data.supplierPayments.push({ id:uid(), hid:S.hid, supplierId:s.id, supplier:s.name,
+        amount:amt, date:val('spDate') || todayISO(), note:val('spNote') });
+      saveAll(); closeSheet(); render(); toast('Đã trả ' + money(amt));
+      break;
+    }
+
+    /* kiểm kê tồn kho */
+    case 'stockAdjust': {
+      const p = prods().find(x => x.id === id);
+      if (p) sheet(stockAdjustForm(p));
+      break;
+    }
+    case 'saveStockAdj': {
+      const p = prods().find(x => x.id === val('adjId'));
+      if (!p){ toast('Cần chọn hàng hóa'); break; }
+      const now = Math.max(0, numv('adjStock')), delta = now - n0(p.stock);
+      p.stock = now;
+      S.data.stockAdj.push({ id:uid(), hid:S.hid, productId:p.id, product:p.name,
+        delta, reason:val('adjReason'), date:val('adjDate') || todayISO() });
+      saveAll(); closeSheet(); render(); toast('Đã kiểm kê tồn kho');
+      break;
+    }
+    case 'delStockAdj': {
+      const a = S.data.stockAdj.find(x => x.id === id);
+      if (!a) break;
+      if (!confirm('Bỏ lần kiểm kê này? Tồn sẽ được trả về số cũ.')) break;
+      const p = S.data.products.find(x => x.id === a.productId);
+      if (p) p.stock = Math.max(0, n0(p.stock) - n0(a.delta));
+      S.data.stockAdj = S.data.stockAdj.filter(x => x.id !== id);
+      saveAll(); render();
+      break;
+    }
+
+    /* cổng dữ liệu hóa đơn */
+    case 'bridgeSampleSale': {
+      const f = $('#bridgeInput');
+      if (f) f.value = JSON.stringify(Bridge.sample('sale'), null, 1);
+      bridgeOut('Đã điền mẫu hóa đơn bán ra. Nhấn Kiểm tra trước khi nạp.', true);
+      break;
+    }
+    case 'bridgeSamplePur': {
+      const f = $('#bridgeInput');
+      if (f) f.value = JSON.stringify(Bridge.sample('purchase'), null, 1);
+      bridgeOut('Đã điền mẫu hóa đơn mua vào. Nhấn Kiểm tra trước khi nạp.', true);
+      break;
+    }
+    case 'bridgePreview': {
+      try {
+        const p = Bridge.parse(val('bridgeInput')), list = p.batch || [p.one];
+        const msg = list.map((x, i) => (i + 1) + '. ' + (x.kind === 'purchase' ? 'Mua' : 'Bán')
+          + ' ' + x.code + ' · ' + x.date + ' · ' + x.partner + ' · '
+          + x.lines.length + ' dòng · ' + money(x.total)).join('\n');
+        bridgeOut(msg, true);
+      } catch (err){ bridgeOut('Dữ liệu chưa đúng: ' + err.message, false); }
+      break;
+    }
+    case 'bridgeImport': {
+      const text = val('bridgeInput');
+      try {
+        const p = Bridge.parse(text), list = p.batch || [p.one];
+        const dup = list.find(x => (x.kind === 'purchase' ? purs() : invs())
+          .some(y => y.code === x.code));
+        if (dup) throw new Error('mã chứng từ ' + dup.code + ' đã tồn tại');
+        if (!confirm('Nạp ' + fmt(list.length) + ' chứng từ vào hộ này?')) break;
+        Bridge.importData(text);
+        render();
+        const f = $('#bridgeInput'); if (f) f.value = text;
+        bridgeOut('Đã nạp ' + fmt(list.length) + ' chứng từ. Kiểm lại tồn kho và công nợ.', true);
+        toast('Đã nạp dữ liệu hóa đơn');
+      } catch (err){ bridgeOut('Không nạp được: ' + err.message, false); }
+      break;
+    }
+    case 'bridgeExportJson': {
+      const kind = val('bridgeKind') || 'sale';
+      const o = Bridge.exportData(kind);
+      downloadText('hoadon-' + kind + '-' + todayISO() + '.json', JSON.stringify(o, null, 1));
+      toast('Đã xuất ' + fmt(o.invoices.length) + ' chứng từ ra JSON');
+      break;
+    }
+    case 'bridgeExportXml': {
+      const kind = val('bridgeKind') || 'sale';
+      const o = Bridge.exportData(kind);
+      const xml = '<invoices>' + o.invoices.map(x => Bridge.toXML(x)).join('') + '</invoices>';
+      downloadText('hoadon-' + kind + '-' + todayISO() + '.xml', xml, 'application/xml;charset=utf-8');
+      toast('Đã xuất ' + fmt(o.invoices.length) + ' chứng từ ra XML');
+      break;
+    }
 
     /* khách hàng */
     case 'addCust': sheet(customerForm(null)); break;
@@ -526,7 +828,7 @@ document.addEventListener('input', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape'){ closeSheet(); return; }
   if (!e.altKey) return;
-  const routes = ['home', 'sell', 'book', 'tax', 'menu'];
+  const routes = ['home', 'sell', 'book', 'tax', 'menu', 'purchases', 'stock', 'data'];
   const i = Number(e.key) - 1;
   if (i >= 0 && i < routes.length){ e.preventDefault(); go(routes[i]); }
 });

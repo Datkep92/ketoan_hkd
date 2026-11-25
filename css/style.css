@@ -140,6 +140,24 @@ label.row input[type=checkbox]{width:18px;height:18px;accent-color:var(--main)}
   transition:opacity .2s;max-width:min(420px,90vw)}
 #toast.on{opacity:.97}
 
+/* bảng điều khiển và dữ liệu mở rộng */
+.alertline{margin-top:4px}
+.tblwrap{overflow:auto;border:1px solid var(--line);border-radius:var(--r);background:#fff}
+.tbl .low{color:var(--warn);font-weight:700}
+.tbl .warn{color:var(--warn);font-weight:600}
+.spark{display:grid;grid-template-columns:repeat(6,minmax(24px,1fr));gap:8px;height:112px;
+  align-items:end;padding-top:6px}
+.spark>div{height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px}
+.spark i{display:block;width:min(70%,36px);background:var(--main);border-radius:4px 4px 0 0}
+.spark small{color:var(--muted);font-size:11px;white-space:nowrap}
+.bridgeout:empty{display:none}
+.bridgeout pre{max-height:220px;overflow:auto;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  background:#f8fafc;border:1px solid var(--line);border-radius:9px;padding:10px;white-space:pre-wrap;word-break:break-word}
+.bridgeout pre.ok{color:var(--ok)}
+.bridgeout pre.warn{color:var(--bad)}
+pre.code{background:#f8fafc;border:1px solid var(--line);border-radius:9px;padding:10px;overflow:auto;
+  font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap}
+
 /* in ấn */
 #print{display:none}
 @media print{

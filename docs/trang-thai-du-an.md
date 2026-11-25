@@ -9,11 +9,16 @@ thanh bên khi dùng màn hình rộng, năm thẻ khi dùng điện thoại.
 | Việc | Kiểm bằng gì |
 |---|---|
 | Thiết lập lần đầu: ngưỡng, kỳ kê khai, hộ đầu tiên | `Scripts/smoke_app.mjs` |
-| Hàng hóa: thêm/sửa/xóa, giá, tồn kho, đưa vào giỏ | smoke |
+| Hàng hóa: thêm/sửa/xóa, giá, tồn kho, tồn tối thiểu, đưa vào giỏ | smoke |
 | Bán hàng: tiền mặt, chuyển khoản, ghi nợ; giảm giá; trừ tồn; in phiếu | smoke |
 | Khách hàng: công nợ, thu nợ | smoke |
 | Chi phí: thêm/xóa | smoke |
-| Sổ sách: doanh thu kỳ, theo nhóm thuế, in bảng kê, in lại hóa đơn, xuất CSV | smoke |
+| Mua hàng: phiếu nhập, giá vốn bình quân, in, trả hàng, xóa | smoke |
+| Nhà cung cấp: thêm, ghi nợ, trả nợ | smoke |
+| Tồn kho: kiểm kê, bỏ kiểm kê hoàn tồn, cảnh báo tồn thấp | smoke |
+| Quỹ tiền mặt ước tính, số dư đầu kỳ | smoke |
+| Sổ sách: bảng kê và CSV, sáu sổ xem trước/in/xuất Excel, in lại hóa đơn | smoke |
+| Cổng dữ liệu: mẫu JSON, xem trước, nạp, chặn trùng mã, xuất JSON/XML | smoke |
 | Thuế: GTGT theo nhóm, TNCN hai cách A/B, giảm 30%, đổi kỳ, ghi nhận đã nộp | smoke |
 | Số liệu thuế theo ví dụ luật (1,8 / 2,2 / 2,5 tỷ; sát ngưỡng; trên 3 tỷ; trên 10 tỷ) | smoke |
 | Cấu hình chính sách thuế: lưu không mất số, chọn nhanh ngưỡng, khôi phục mặc định | smoke |
@@ -21,16 +26,18 @@ thanh bên khi dùng màn hình rộng, năm thẻ khi dùng điện thoại.
 | Lưu trữ trong máy (IndexedDB, đường lui localStorage) | smoke + Safari |
 | Sao lưu ra tệp JSON và nhập lại | smoke |
 | Mọi màn hình vẽ được; mọi nút/ô có xử lý; Menu và liên kết trỏ đúng | smoke |
-| Phím tắt Alt+1…Alt+5, Esc | smoke |
+| Phím tắt Alt+1…Alt+8, Esc | smoke |
 | Cấu trúc trang, thứ tự tải script, cú pháp | `python3 Scripts/check_app.py` |
 
-Kết quả lần chạy gần nhất: **142 điều đúng, 0 điều sai**; kiểm cấu trúc cũng
+Kết quả lần chạy gần nhất: **194 điều đúng, 0 điều sai**; kiểm cấu trúc cũng
 đạt. Cách chạy: xem `AGENTS.md`.
 
-**Kiểm trong Safari thật (25/11/2026):** máy chủ nội bộ ghi `200` cho trang và
-cả bốn tệp CSS/JS. Bản dò chèn vào trang báo 11 màn hình nạp được, năm thẻ và
-bảy mục Menu đầy đủ, trang chính vẽ ra chữ, IndexedDB hoạt động, bấm thử Menu
-và Bán hàng chuyển đúng màn hình, không lỗi JavaScript.
+**Kiểm trong Safari thật (25/11/2026, bản sau khi mở rộng):** máy chủ nội bộ
+ghi `200` cho trang và cả bốn tệp CSS/JS. Bản dò chèn vào trang báo 15 màn hình
+nạp được (mỗi màn hình có chữ), năm thẻ và mười mục Menu đầy đủ, IndexedDB hoạt
+động, thanh bên hiện ra, bấm thử Mua hàng và Cổng dữ liệu chuyển đúng màn hình,
+không lỗi JavaScript. Các luồng mới (mua/trả hàng, nhà cung cấp, kiểm kê, cổng
+JSON/XML, sổ sách mở rộng) đã kiểm trong khung mô phỏng `Scripts/smoke_app.mjs`.
 
 **Web công khai (25/11/2026):** đã bật GitHub Pages từ nhánh `main` tại
 `https://datkep92.github.io/ketoan_hkd/`. Trang và cả bốn tệp CSS/JS đều trả về
