@@ -39,6 +39,11 @@ nạp được (mỗi màn hình có chữ), năm thẻ và mười mục Menu �
 không lỗi JavaScript. Các luồng mới (mua/trả hàng, nhà cung cấp, kiểm kê, cổng
 JSON/XML, sổ sách mở rộng) đã kiểm trong khung mô phỏng `Scripts/smoke_app.mjs`.
 
+**Giao diện Sổ theo dõi và nhóm Quản lý (25/11/2026):** danh sách sổ xếp một
+cột trên điện thoại, hai cột từ 1000 px; tiêu đề bảng sổ dính khi cuộn, dòng
+chẵn/lẻ dễ theo dõi. Đo trên Safari qua máy chủ nội bộ: đủ sáu sổ, mười bốn mục
+trong hai nhóm Menu, không lỗi JavaScript.
+
 **Web công khai (25/11/2026):** đã bật GitHub Pages từ nhánh `main` tại
 `https://datkep92.github.io/ketoan_hkd/`. Trang và cả bốn tệp CSS/JS đều trả về
 `HTTP 200`; nội dung trang đúng bản đã kiểm ở trên. Chưa bấm thử trên bản công

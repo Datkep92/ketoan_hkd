@@ -326,7 +326,7 @@ VIEWS.book = function(){
   return '<div class="pad"><div class="card"><div class="row wrap"><div><h2>Sổ sách</h2>'
     + '<div class="muted">Xem theo tháng, in bảng kê và xuất ra tệp CSV.</div></div><div class="sp"></div>'
     + '<label class="f" style="margin:0"><span>Tháng</span><input type="month" id="bookMonth" value="' + esc(m) + '"></label></div></div>'
-    + '<div class="card"><div class="row wrap"><h3 style="margin:0">Sổ theo dõi</h3><div class="sp"></div>'
+    + '<div class="card book-list list-card"><div class="row wrap"><h3 style="margin:0">Sổ theo dõi</h3><div class="sp"></div>'
     + '<span class="muted small">In hoặc xuất ra tệp Excel</span></div>'
     + BOOKS.map(b => item('bookInfo', b.code + ' — ' + b.name, b.sub, b.k)).join('') + '</div>'
     + '<div class="card"><div class="row wrap"><h3 style="margin:0">Lịch sử bán hàng</h3><div class="sp"></div>'
@@ -509,7 +509,7 @@ VIEWS.menu = function(){
   return '<div class="pad"><div class="card"><h2>Menu</h2>'
     + '<div class="muted">' + (h ? esc(h.name) : 'Chưa có hộ kinh doanh') + '</div></div>'
     + '<div class="grid2">'
-    + '<div class="card"><h3>Quản lý</h3>'
+    + '<div class="card list-card"><h3>Quản lý</h3>'
     + nav('sell', 'Bán hàng', 'Lập phiếu, in, ghi nợ')
     + nav('products', 'Hàng hóa', 'Thêm, sửa, xóa mặt hàng')
     + nav('purchases', 'Mua hàng', 'Phiếu nhập, nhà cung cấp')
@@ -520,7 +520,7 @@ VIEWS.menu = function(){
     + nav('tax', 'Thuế', 'Ước tính GTGT và TNCN')
     + nav('policy', 'Chính sách thuế', 'Ngưỡng, thuế suất, giảm 30%')
     + '</div>'
-    + '<div class="card"><h3>Dữ liệu và hỗ trợ</h3>'
+    + '<div class="card list-card"><h3>Dữ liệu và hỗ trợ</h3>'
     + nav('data', 'Cổng dữ liệu hóa đơn', 'Nhập/xuất JSON, XML')
     + item('backup', 'Sao lưu ra tệp JSON', 'Lưu định kỳ ở nơi an toàn')
     + item('restore', 'Nhập từ tệp JSON', 'Ghi đè dữ liệu hiện có sau khi xác nhận')
